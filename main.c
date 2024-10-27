@@ -185,16 +185,14 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
                     // cm se enciende el led rojo PF1
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000002);
 
-            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2,0x00000008);
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1,0x00000002);
 
         }
         else if (distancia >= x3 && distancia <= x4 )
         {
                     //  cm se encienden ambos leds rojo y verde
-            //GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000002);
-
-            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1,0x00000002);
-            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2,0x00000004);
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 ,0x00000002);
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3,0x00000008);
         }
         else
         {
