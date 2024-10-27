@@ -61,7 +61,10 @@ float y = 0.3;  // Valor Y del joystick
 
 int motor1 = 0;
 int motor2 = 0;
-
+float x1 = 5;
+float x2 = 10;
+float x3 = 15;
+float x4 = 20;
 
 //*****************************************************************************
 //
@@ -142,7 +145,7 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
 
     MuestrasADC muestras;
     MESSAGE_ADC_SAMPLE_PARAMETER parameter;
-
+    double distancia = 1110 ;
 
     //
     // Bucle infinito, las tareas en FreeRTOS no pueden "acabar", deben "matarse" con la funcion xTaskDelete().
@@ -159,16 +162,46 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
         parameter.chan6=muestras.chan6;
         parameter.chan7=muestras.chan7;
         parameter.chan8=muestras.chan8;
-        if( parameter.chan2 > 2000)
+        if( parameter.chan2 < 3420 && parameter.chan2 > 899)
         {
-            activatePWM(75,75);
+            distancia = -(parameter.chan2 - 3614) / 179.08;
         }
-        if( parameter.chan2 > 2000)
-                {
-                    activatePWM(75,75);
-                }
 
+        else if( parameter.chan2 < 900 && parameter.chan2 > 286)
+        {
+            distancia = -(parameter.chan2 - 1222.6) / 24.853;
+        }
+        else
+        {
+            distancia = 111111;
+        }
+        if (distancia >= x1 && distancia < x2 )
+        {
+            // cm se enciende el led verde PF3
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000008);
+        }
+        else if (distancia >= x2 && distancia < x3 )
+        {
+                    // cm se enciende el led rojo PF1
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000002);
 
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2,0x00000008);
+
+        }
+        else if (distancia >= x3 && distancia <= x4 )
+        {
+                    //  cm se encienden ambos leds rojo y verde
+            //GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000002);
+
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1,0x00000002);
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2,0x00000004);
+        }
+        else
+        {
+            //los leds permanecen apagados
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0);
+
+        }
        // UARTprintf("He leedo ADC0 %d\n ",muestras.chan2);
         //Encia el mensaje hacia QT
         //remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
