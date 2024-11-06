@@ -67,7 +67,11 @@ float x1 = 5;
 float x2 = 10;
 float x3 = 15;
 float x4 = 20;
+int R = 10;
 float whitecount = 0;
+int theta = 0;
+int realtheta=0;
+
 
 //*****************************************************************************
 //
@@ -135,6 +139,69 @@ void vApplicationMallocFailedHook (void)
 
 
 
+int mover_robotM(int32_t c)
+{
+    //D = (R * (thetaRight+thetaLeft)/2)
+    int32_t thetatemp = c / R ;
+    thetatemp = thetatemp * 6;
+    if(c > 0){
+    while(abs(thetatemp) > realtheta)
+    {
+        forward();
+    }
+    stop();
+    realtheta = 0;
+    }
+    if(c < 0){
+    while(abs(thetatemp) > realtheta)
+    {
+        rewind();
+    }
+    realtheta = 0;
+    stop();
+    }
+
+    return 0;
+}
+
+int girar_robotM(int32_t g)
+{
+
+    //theta = R/l (tethaLeft - tethaRight) ** que l es destancia de las reudas
+    int32_t thetatemp = (g * M_PI) / 180 ;
+    thetatemp = thetatemp / (M_PI / 3);
+    if(g > 0){
+    while(abs(thetatemp) > (realtheta))
+    {
+        right();
+    }
+    realtheta = 0;
+    stop();
+    }
+    if(g < 0){
+    while(abs(thetatemp) > (realtheta ))
+    {
+        left();
+    }
+    realtheta = 0;
+    stop();
+    }
+
+    return 0;
+}
+int lazocerado()
+{
+    mover_robotM(12);
+    girar_robotM(90);
+    mover_robotM(18);
+    girar_robotM(90);
+    mover_robotM(12);
+    girar_robotM(90);
+    mover_robotM(18);
+    girar_robotM(90);
+
+    return 0;
+}
 //*****************************************************************************
 //
 // A continuacion van las tareas...
@@ -146,7 +213,7 @@ void vApplicationMallocFailedHook (void)
 static portTASK_FUNCTION(ADCTask,pvParameters)
 {
 
-    MuestrasADC muestras;
+    MuestrasADCLive muestras;
     MESSAGE_ADC_SAMPLE_PARAMETER parameter;
     double distancia = 1110 ;
 
@@ -250,17 +317,20 @@ static portTASK_FUNCTION(Switch2Task,pvParameters)
 //        MESSAGE_SW_PARAMETER parametro;
 //        parametro.sw.number = 2;
 //        //parametro.sw.state = 1;
-        if (VelocidadF2 > 74 && VelocidadF2 < 101){
-            if(!(VelocidadF2 == 100))
-                    VelocidadF2 = VelocidadF2 + 1;
-                    activatePWM(VelocidadF2,VelocidadF3);
-                }
-        if (VelocidadF3 > 49 && VelocidadF3 < 76){
-            if(!(VelocidadF3 == 50))
-                    VelocidadF3 = VelocidadF3 - 1;
-                    activatePWM(VelocidadF2,VelocidadF3);
-                }
+//        if (VelocidadF2 > 74 && VelocidadF2 < 101){
+//            if(!(VelocidadF2 == 100))
+//                    VelocidadF2 = VelocidadF2 + 1;
+//                    activatePWM(VelocidadF2,VelocidadF3);
+//                }
+//        if (VelocidadF3 > 49 && VelocidadF3 < 76){
+//            if(!(VelocidadF3 == 50))
+//                    VelocidadF3 = VelocidadF3 - 1;
+//                    activatePWM(VelocidadF2,VelocidadF3);
+//                }
 
+        mover_robotM(-20);//eligimos para probar mover
+//        girar_robotM(90);//eligimos para probar mover
+//        lazocerado();//eligimos para lazo cerado
         xSemaphoreTake(miSemaforo2,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
         //UARTprintf("He puesto botton drecha ye mandado mensaje\n");
@@ -291,11 +361,9 @@ static portTASK_FUNCTION(wheelTask,pvParameters)
     //
     while(1)
     {
-        //configADC_DisparaADC(); //Dispara la conversion (por software)
-
+        theta = 0;
+        realtheta = realtheta + 1 ;
         xSemaphoreTake(miSemaforo4,portMAX_DELAY);
-//        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
-        //UARTprintf("He puesto botton drecha ye mandado mensaje\n");
     }
 }
 
@@ -493,6 +561,7 @@ int main(void)
     {
         while(1);
     }
+    activatePWM(75,75);
     if((xTaskCreate(wheelTask,(portCHAR *) "wheel",wheelTASKSTACKSIZE, NULL,wheelTASKPRIO, NULL) != pdTRUE))
     {
         while(1);
@@ -546,16 +615,8 @@ void counterroute(void){
 
     if (!(i32PinStatus & GPIO_PIN_3))
     {
-        if(whitecount < 6)
-            {
-            whitecount = whitecount + 1;
-            }
-        else
-        {
-            whitecount = 0;
-            xSemaphoreGiveFromISR(miSemaforo4,&xHigherPriorityTaskWoken);
-
-        }
+        theta = 1;
+        xSemaphoreGiveFromISR(miSemaforo4,&xHigherPriorityTaskWoken);
     }
 
     MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3);

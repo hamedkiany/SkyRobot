@@ -1,5 +1,4 @@
 /*################################################
-/*
  * PWMLib.h
  *
  *  Created on: 23 oct. 2024
@@ -89,26 +88,33 @@ int rewind()
 }
 int right()
 {
-    configPWM1(55);
-    configPWM2(80);
+    configPWM1(75);
+    configPWM2(85);
 
     return 0;
 }
 int left()
 {
-    configPWM1(80);
-    configPWM2(55);
+    configPWM1(85);
+    configPWM2(70);
+
+    return 0;
+}
+int stop()
+{
+    configPWM1(75);
+    configPWM2(75);
 
     return 0;
 }
 
-int mover_robot(uint32_t c)
+int mover_robot(int32_t c)
 {
     //D = (R * (thetaRight+thetaLeft)/2)
     return 0;
 }
 
-int girar_robot(uint32_t g)
+int girar_robot(int32_t g)
 {
     //theta = R/l (tethaLeft - tethaRight) ** que l es destancia de las reudas
     return 0;
