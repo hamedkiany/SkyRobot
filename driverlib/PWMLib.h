@@ -18,6 +18,7 @@ extern int forward();
 extern int rewind();
 extern int right();
 extern int left();
-
+extern int mover_robot(uint32_t c);
+extern int girar_robot(uint32_t g);
 
 #endif /* DRIVERLIB_PWMLIB_H_ */

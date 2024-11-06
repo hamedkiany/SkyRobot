@@ -1,19 +1,10 @@
 /*################################################
-# Hardware PWM proof of concept using
-# the Tiva C Launchpad
-#
-# Started with example code by
-# lawrence_jeff found here:
-# http://forum.stellarisiti.com/topic/707-using-hardware-pwm-on-tiva-launchpad/
-#
-# Altered to use code found on section
-# 22.3 of the TivaWare Peripheral Driver
-# Library User's Guide found here:
-# http://www.ti.com/lit/ug/spmu298a/spmu298a.pdf
-#
-#
-# This example pulses three on-board LEDs
-#
+/*
+ * PWMLib.h
+ *
+ *  Created on: 23 oct. 2024
+ *      Author: hamed
+ *
 #################################################*/
 
 
@@ -84,19 +75,41 @@ int configPWM2(uint32_t VelocidadF3)
 }
 int forward()
 {
+    configPWM1(55);
+    configPWM2(95);
     return 0;
 }
 
 int rewind()
 {
+    configPWM1(95);
+    configPWM2(55);
+
     return 0;
 }
 int right()
 {
+    configPWM1(55);
+    configPWM2(80);
+
     return 0;
 }
 int left()
 {
+    configPWM1(80);
+    configPWM2(55);
+
     return 0;
 }
 
+int mover_robot(uint32_t c)
+{
+    //D = (R * (thetaRight+thetaLeft)/2)
+    return 0;
+}
+
+int girar_robot(uint32_t g)
+{
+    //theta = R/l (tethaLeft - tethaRight) ** que l es destancia de las reudas
+    return 0;
+}

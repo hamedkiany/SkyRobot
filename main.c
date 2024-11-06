@@ -50,12 +50,14 @@
 #define SW2TASKSTACKSIZE (256)     // Tamaño de pila para la tarea SW2TASK
 #define SW3TASKPRIO (tskIDLE_PRIORITY+1)            // Prioridad para la tarea SW3TASK
 #define SW3TASKSTACKSIZE (256)     // Tamaño de pila para la tarea SW3TASK
+#define wheelTASKPRIO (tskIDLE_PRIORITY+1)            // Prioridad para la tarea wheelTASK
+#define wheelTASKSTACKSIZE (256)     // Tamaño de pila para la tarea wheelTASK
 
 //Globales
 uint32_t g_ui32CPUUsage;
 uint32_t g_ulSystemClock;
-int VelocidadF2 = 75 , VelocidadF3 = 75;
-SemaphoreHandle_t miSemaforo,miSemaforo2,miSemaforo3;
+int VelocidadF2 = 75 , VelocidadF3 = 75,routcount = 0;
+SemaphoreHandle_t miSemaforo,miSemaforo2,miSemaforo3,miSemaforo4;
 float x = 0.5;  // Valor X del joystick
 float y = 0.3;  // Valor Y del joystick
 
@@ -65,6 +67,7 @@ float x1 = 5;
 float x2 = 10;
 float x3 = 15;
 float x4 = 20;
+float whitecount = 0;
 
 //*****************************************************************************
 //
@@ -200,6 +203,7 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0);
 
         }
+
        // UARTprintf("He leedo ADC0 %d\n ",muestras.chan2);
         //Encia el mensaje hacia QT
         //remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
@@ -274,6 +278,22 @@ static portTASK_FUNCTION(Switch3Task,pvParameters)
         configADC_DisparaADC(); //Dispara la conversion (por software)
 
         xSemaphoreTake(miSemaforo3,portMAX_DELAY);
+//        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
+        //UARTprintf("He puesto botton drecha ye mandado mensaje\n");
+    }
+}
+
+static portTASK_FUNCTION(wheelTask,pvParameters)
+{
+    xSemaphoreTake(miSemaforo4,portMAX_DELAY);
+    //
+    // Loop forever.
+    //
+    while(1)
+    {
+        //configADC_DisparaADC(); //Dispara la conversion (por software)
+
+        xSemaphoreTake(miSemaforo4,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
         //UARTprintf("He puesto botton drecha ye mandado mensaje\n");
     }
@@ -417,11 +437,23 @@ int main(void)
     MAP_IntPrioritySet(INT_GPIOF,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
     MAP_GPIOIntEnable(GPIO_PORTF_BASE,ALL_BUTTONS|GPIO_PIN_4);
     MAP_IntEnable(INT_GPIOF);
+//para port A
+    MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    MAP_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOA);
+    ROM_GPIODirModeSet(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_DIR_MODE_IN);
+    //MAP_GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4);
+    MAP_GPIOPinTypeGPIOInput(GPIO_PORTA_BASE,GPIO_PIN_3);
+    MAP_IntPrioritySet(INT_GPIOA,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
+//    MAP_GPIOPadConfigSet(GPIO_PORTA_BASE, GPIO_PIN_3,
+//                             GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+    MAP_GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3);
+    MAP_IntEnable(INT_GPIOA);
 
 
     miSemaforo = xSemaphoreCreateBinary();
     miSemaforo2 = xSemaphoreCreateBinary();
     miSemaforo3 = xSemaphoreCreateBinary();
+    miSemaforo4 = xSemaphoreCreateBinary();
 
 
 	/********************************      Creacion de tareas *********************/
@@ -458,6 +490,10 @@ int main(void)
         while(1);
     }
     if((xTaskCreate(Switch3Task,(portCHAR *) "Sw3",SW3TASKSTACKSIZE, NULL,SW3TASKPRIO, NULL) != pdTRUE))
+    {
+        while(1);
+    }
+    if((xTaskCreate(wheelTask,(portCHAR *) "wheel",wheelTASKSTACKSIZE, NULL,wheelTASKPRIO, NULL) != pdTRUE))
     {
         while(1);
     }
@@ -502,4 +538,27 @@ void GPIOFIntHandler(void){
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
+void counterroute(void){
 
+    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTA_BASE,GPIO_PIN_3);
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+
+    if (!(i32PinStatus & GPIO_PIN_3))
+    {
+        if(whitecount < 6)
+            {
+            whitecount = whitecount + 1;
+            }
+        else
+        {
+            whitecount = 0;
+            xSemaphoreGiveFromISR(miSemaforo4,&xHigherPriorityTaskWoken);
+
+        }
+    }
+
+    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+}
