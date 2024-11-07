@@ -54,8 +54,8 @@
 #define wheelTASKSTACKSIZE (256)     // Tamaño de pila para la tarea wheelTASK
 
 //Globales
-uint32_t g_ui32CPUUsage;
-uint32_t g_ulSystemClock;
+volatile uint32_t g_ui32CPUUsage;
+volatile uint32_t g_ulSystemClock;
 int VelocidadF2 = 75 , VelocidadF3 = 75,routcount = 0;
 SemaphoreHandle_t miSemaforo,miSemaforo2,miSemaforo3,miSemaforo4;
 float x = 0.5;  // Valor X del joystick
@@ -67,10 +67,11 @@ float x1 = 5;
 float x2 = 10;
 float x3 = 15;
 float x4 = 20;
-int R = 10;
-float whitecount = 0;
-int theta = 0;
-int realtheta=0;
+int R = 2.5;
+int L = 10;
+volatile float whitecount = 0;
+volatile int theta = 0;
+volatile int realtheta=0;
 
 
 //*****************************************************************************
@@ -143,7 +144,7 @@ int mover_robotM(int32_t c)
 {
     //D = (R * (thetaRight+thetaLeft)/2)
     int32_t thetatemp = c / R ;
-    thetatemp = thetatemp * 6;
+    thetatemp = (thetatemp * 6) / (2 * M_PI) ;
     if(c > 0){
     while(abs(thetatemp) > realtheta)
     {
@@ -169,7 +170,8 @@ int girar_robotM(int32_t g)
 
     //theta = R/l (tethaLeft - tethaRight) ** que l es destancia de las reudas
     int32_t thetatemp = (g * M_PI) / 180 ;
-    thetatemp = thetatemp / (M_PI / 3);
+    //thetatemp = 5;
+    thetatemp = (thetatemp * 6) / (2 * M_PI) ;
     if(g > 0){
     while(abs(thetatemp) > (realtheta))
     {
@@ -179,7 +181,7 @@ int girar_robotM(int32_t g)
     stop();
     }
     if(g < 0){
-    while(abs(thetatemp) > (realtheta ))
+    while(abs(thetatemp) >= (realtheta ))
     {
         left();
     }
@@ -290,16 +292,19 @@ static portTASK_FUNCTION(Switch1Task,pvParameters)
 //        MESSAGE_SW_PARAMETER parametro;
 //        parametro.sw.number = 1;
 //        //parametro.sw.state = 1;
-        if (VelocidadF2 > 74 && VelocidadF2 < 101){
-            if(!(VelocidadF2 == 75))
-                    VelocidadF2 = VelocidadF2 - 1;
-            activatePWM(VelocidadF2,VelocidadF3);
-        }
-        if (VelocidadF3 > 49 && VelocidadF3 < 76){
-                    if(!(VelocidadF2 == 75))
-                            VelocidadF3 = VelocidadF3 + 1;
-                    activatePWM(VelocidadF2,VelocidadF3);
-                }
+//        if (VelocidadF2 > 74 && VelocidadF2 < 101){
+//            if(!(VelocidadF2 == 75))
+//                    VelocidadF2 = VelocidadF2 - 1;
+//            activatePWM(VelocidadF2,VelocidadF3);
+//        }
+//        if (VelocidadF3 > 49 && VelocidadF3 < 76){
+//                    if(!(VelocidadF2 == 75))
+//                            VelocidadF3 = VelocidadF3 + 1;
+//                    activatePWM(VelocidadF2,VelocidadF3);
+//                }
+ //       lazocerado();//eligimos para lazo cerado
+         girar_robotM(90);//eligimos para probar mover
+
        xSemaphoreTake(miSemaforo,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
 //       UARTprintf("He puesto botton ye mandado mensaje\n");
@@ -328,9 +333,7 @@ static portTASK_FUNCTION(Switch2Task,pvParameters)
 //                    activatePWM(VelocidadF2,VelocidadF3);
 //                }
 
-        mover_robotM(-20);//eligimos para probar mover
-//        girar_robotM(90);//eligimos para probar mover
-//        lazocerado();//eligimos para lazo cerado
+       mover_robotM(20);//eligimos para probar mover
         xSemaphoreTake(miSemaforo2,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
         //UARTprintf("He puesto botton drecha ye mandado mensaje\n");
@@ -346,7 +349,7 @@ static portTASK_FUNCTION(Switch3Task,pvParameters)
     while(1)
     {
         configADC_DisparaADC(); //Dispara la conversion (por software)
-
+        lazocerado();
         xSemaphoreTake(miSemaforo3,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
         //UARTprintf("He puesto botton drecha ye mandado mensaje\n");

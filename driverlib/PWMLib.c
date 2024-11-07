@@ -63,13 +63,13 @@ int activatePWM(uint32_t VelocidadF2, uint32_t VelocidadF3)
 
 int configPWM1(uint32_t VelocidadF2)
 {
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6,VelocidadF2);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6,VelocidadF2 * 16);
     return 0;
 }
 
 int configPWM2(uint32_t VelocidadF3)
 {
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7,VelocidadF3);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7,VelocidadF3 * 16);
     return 0;
 }
 int forward()
@@ -95,8 +95,8 @@ int right()
 }
 int left()
 {
-    configPWM1(85);
-    configPWM2(70);
+    configPWM1(55);
+    configPWM2(75);
 
     return 0;
 }
