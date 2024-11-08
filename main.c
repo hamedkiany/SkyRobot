@@ -56,6 +56,8 @@
 //Globales
 volatile uint32_t g_ui32CPUUsage;
 volatile uint32_t g_ulSystemClock;
+volatile uint32_t g_ulSystemClock2;
+
 int VelocidadF2 = 75 , VelocidadF3 = 75,routcount = 0;
 SemaphoreHandle_t miSemaforo,miSemaforo2,miSemaforo3,miSemaforo4;
 float x = 0.5;  // Valor X del joystick
@@ -67,11 +69,12 @@ float x1 = 5;
 float x2 = 10;
 float x3 = 15;
 float x4 = 20;
-int R = 2.5;
+float R = 2.5;
 int L = 10;
 volatile float whitecount = 0;
 volatile int theta = 0;
 volatile int realtheta=0;
+volatile float thetatempF = 0;
 
 
 //*****************************************************************************
@@ -142,19 +145,26 @@ void vApplicationMallocFailedHook (void)
 
 int mover_robotM(int32_t c)
 {
+//    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);           // Habilitar el módulo de Timer0
+//    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP);     // Configurar como temporizador de cuenta ascendente de 32 bits
+//    TimerLoadSet(TIMER0_BASE, TIMER_A, SysCtlClockGet() - 1); // Configurar para que cuente cada segundo
+//    TimerEnable(TIMER0_BASE, TIMER_A);                      // Habilitar el Timer0
+
     //D = (R * (thetaRight+thetaLeft)/2)
-    int32_t thetatemp = c / R ;
-    thetatemp = (thetatemp * 6) / (2 * M_PI) ;
+    thetatempF = c / R ;
+    thetatempF = (thetatempF * 6) / (2 * M_PI) ;
     if(c > 0){
-    while(abs(thetatemp) > realtheta)
+//    uint32_t g_ulSystemClock3  = TimerValueGet(TIMER0_BASE, TIMER_A);
+
+    while(abs(thetatempF) > realtheta)
     {
         forward();
     }
-    stop();
+     stop();
     realtheta = 0;
     }
     if(c < 0){
-    while(abs(thetatemp) > realtheta)
+    while(abs(thetatempF) > realtheta)
     {
         rewind();
     }
@@ -169,8 +179,9 @@ int girar_robotM(int32_t g)
 {
 
     //theta = R/l (tethaLeft - tethaRight) ** que l es destancia de las reudas
-    int32_t thetatemp = (g * M_PI) / 180 ;
-    //thetatemp = 5;
+    float thetatemp = 0 ;
+    thetatemp = (g * M_PI) / 180 ;
+    thetatemp = (L/R) * thetatemp;
     thetatemp = (thetatemp * 6) / (2 * M_PI) ;
     if(g > 0){
     while(abs(thetatemp) > (realtheta))
@@ -194,12 +205,26 @@ int girar_robotM(int32_t g)
 int lazocerado()
 {
     mover_robotM(12);
+    SysCtlDelay(600000);
+
     girar_robotM(90);
+    SysCtlDelay(600000);
+
     mover_robotM(18);
+    SysCtlDelay(600000);
+
     girar_robotM(90);
+    SysCtlDelay(600000);
+
     mover_robotM(12);
+    SysCtlDelay(600000);
+
     girar_robotM(90);
+    SysCtlDelay(600000);
+
     mover_robotM(18);
+    SysCtlDelay(600000);
+
     girar_robotM(90);
 
     return 0;
@@ -215,7 +240,7 @@ int lazocerado()
 static portTASK_FUNCTION(ADCTask,pvParameters)
 {
 
-    MuestrasADCLive muestras;
+    MuestrasADC muestras;
     MESSAGE_ADC_SAMPLE_PARAMETER parameter;
     double distancia = 1110 ;
 
@@ -303,7 +328,8 @@ static portTASK_FUNCTION(Switch1Task,pvParameters)
 //                    activatePWM(VelocidadF2,VelocidadF3);
 //                }
  //       lazocerado();//eligimos para lazo cerado
-         girar_robotM(90);//eligimos para probar mover
+         //girar_robotM(90);//eligimos para probar mover
+         lazocerado();
 
        xSemaphoreTake(miSemaforo,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
@@ -333,7 +359,7 @@ static portTASK_FUNCTION(Switch2Task,pvParameters)
 //                    activatePWM(VelocidadF2,VelocidadF3);
 //                }
 
-       mover_robotM(20);//eligimos para probar mover
+       mover_robotM(12);//eligimos para probar mover
         xSemaphoreTake(miSemaforo2,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
         //UARTprintf("He puesto botton drecha ye mandado mensaje\n");
@@ -348,7 +374,7 @@ static portTASK_FUNCTION(Switch3Task,pvParameters)
     //
     while(1)
     {
-        configADC_DisparaADC(); //Dispara la conversion (por software)
+//        configADC_DisparaADC(); //Dispara la conversion (por software)
         lazocerado();
         xSemaphoreTake(miSemaforo3,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
@@ -501,24 +527,35 @@ int main(void)
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
 
 	//Volvemos a configurar los LEDs en modo GPIO POR Defecto
-	MAP_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
-    MAP_GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);
+	MAP_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_3);
+    //MAP_GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_3);
 
 	ButtonsInit();
     MAP_IntPrioritySet(INT_GPIOF,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
-    MAP_GPIOIntEnable(GPIO_PORTF_BASE,ALL_BUTTONS|GPIO_PIN_4);
+    MAP_GPIOIntEnable(GPIO_PORTF_BASE,ALL_BUTTONS);
     MAP_IntEnable(INT_GPIOF);
 //para port A
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
     MAP_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOA);
-    ROM_GPIODirModeSet(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_DIR_MODE_IN);
+    ROM_GPIODirModeSet(GPIO_PORTA_BASE, GPIO_PIN_3| GPIO_PIN_4, GPIO_DIR_MODE_IN);
     //MAP_GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4);
-    MAP_GPIOPinTypeGPIOInput(GPIO_PORTA_BASE,GPIO_PIN_3);
+    MAP_GPIOPinTypeGPIOInput(GPIO_PORTA_BASE,GPIO_PIN_3 | GPIO_PIN_4);
     MAP_IntPrioritySet(INT_GPIOA,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
-//    MAP_GPIOPadConfigSet(GPIO_PORTA_BASE, GPIO_PIN_3,
-//                             GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
-    MAP_GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3);
+    MAP_GPIOPadConfigSet(GPIO_PORTA_BASE, GPIO_PIN_4,
+                             GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+    MAP_GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3| GPIO_PIN_4);
     MAP_IntEnable(INT_GPIOA);
+    //para port B
+        MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+        MAP_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOB);
+        ROM_GPIODirModeSet(GPIO_PORTB_BASE, GPIO_PIN_2, GPIO_DIR_MODE_IN);
+        //MAP_GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4);
+        MAP_GPIOPinTypeGPIOInput(GPIO_PORTB_BASE,GPIO_PIN_2);
+        MAP_IntPrioritySet(INT_GPIOB,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
+        MAP_GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_2,
+                                 GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+        MAP_GPIOIntEnable(GPIO_PORTB_BASE,GPIO_PIN_2);
+        MAP_IntEnable(INT_GPIOB);
 
 
     miSemaforo = xSemaphoreCreateBinary();
@@ -586,12 +623,17 @@ int main(void)
 void GPIOFIntHandler(void){
     //Lee el estado del puerto (activos a nivel bajo)
 
-    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTF_BASE,ALL_BUTTONS);
+    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTF_BASE,ALL_BUTTONS | GPIO_PIN_3);
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    ROM_IntDisable(INT_GPIOF);
+    int ui8Delay = 0;
+
+    for(ui8Delay = 0; ui8Delay < 16; ui8Delay++)
+    {
+    }
     if (!(i32PinStatus & LEFT_BUTTON))
     {
         xSemaphoreGiveFromISR(miSemaforo,&xHigherPriorityTaskWoken);
-
     }
 
     if (!(i32PinStatus & RIGHT_BUTTON))
@@ -600,20 +642,22 @@ void GPIOFIntHandler(void){
 
     }
 
-    if ((i32PinStatus & GPIO_PIN_4))
-    {
-        xSemaphoreGiveFromISR(miSemaforo3,&xHigherPriorityTaskWoken);
 
-    }
-
-    MAP_GPIOIntClear(GPIO_PORTF_BASE,ALL_BUTTONS);
+    MAP_IntEnable(INT_GPIOF);
+    MAP_GPIOIntClear(GPIO_PORTF_BASE,ALL_BUTTONS | GPIO_PIN_4);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void counterroute(void){
 
-    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTA_BASE,GPIO_PIN_3);
+    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTA_BASE,GPIO_PIN_3 );
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    ROM_IntDisable(INT_GPIOA);
+    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3);
+    int ui8Delay = 0;
+    for(ui8Delay = 0; ui8Delay < 16; ui8Delay++)
+    {
+    }
 
 
     if (!(i32PinStatus & GPIO_PIN_3))
@@ -622,7 +666,32 @@ void counterroute(void){
         xSemaphoreGiveFromISR(miSemaforo4,&xHigherPriorityTaskWoken);
     }
 
-    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3);
+    MAP_IntEnable(INT_GPIOA);
+    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3 );
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+}
+
+
+void esp32(void){
+
+    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTB_BASE,GPIO_PIN_2);
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    ROM_IntDisable(INT_GPIOB);
+    MAP_GPIOIntClear(GPIO_PORTB_BASE,GPIO_PIN_2);
+    int ui8Delay = 0;
+    for(ui8Delay = 0; ui8Delay < 1600; ui8Delay++)
+    {
+    }
+
+
+    if ((i32PinStatus & GPIO_PIN_2))
+     {
+         xSemaphoreGiveFromISR(miSemaforo3,&xHigherPriorityTaskWoken);
+
+     }
+    MAP_IntEnable(INT_GPIOB);
+    MAP_GPIOIntClear(GPIO_PORTB_BASE,GPIO_PIN_2);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 
 }

@@ -61,6 +61,7 @@ extern void xPortSysTickHandler(void);
 extern void GPIOFIntHandler(void);
 extern void ADCIntHandler(void);
 extern void counterroute(void);
+extern void esp32(void);
 extern void UARTStdioIntHandler(void);
 extern void USB0DeviceIntHandler(void);
 //*****************************************************************************
@@ -91,7 +92,7 @@ void (* const g_pfnVectors[])(void) =
     xPortPendSVHandler,                     // The PendSV handler
     xPortSysTickHandler,                    // The SysTick handler
     counterroute,                      // GPIO Port A
-    IntDefaultHandler,                      // GPIO Port B
+    esp32,                      // GPIO Port B
     IntDefaultHandler,                      // GPIO Port C
     IntDefaultHandler,                      // GPIO Port D
     IntDefaultHandler,                      // GPIO Port E

@@ -89,7 +89,7 @@ int rewind()
 int right()
 {
     configPWM1(75);
-    configPWM2(85);
+    configPWM2(95);
 
     return 0;
 }
