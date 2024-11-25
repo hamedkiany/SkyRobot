@@ -42,6 +42,7 @@
 #define REMOTELINK_TASK_PRIORITY (tskIDLE_PRIORITY+2)
 #define REMOTELINKesp_TASK_STACK (512)
 #define REMOTELINKesp_TASK_PRIORITY (tskIDLE_PRIORITY+2)
+
 #define COMMAND_TASK_STACK (512)
 #define COMMAND_TASK_PRIORITY (tskIDLE_PRIORITY+1)
 #define ADC_TASK_STACK (512)
@@ -62,6 +63,7 @@ volatile uint32_t g_ulSystemClock2;
 
 int VelocidadF2 = 75 , VelocidadF3 = 75,routcount = 0;
 SemaphoreHandle_t miSemaforo,miSemaforo2,miSemaforo3,miSemaforo4;
+QueueHandle_t realThetaQueue;
 float x = 0.5;  // Valor X del joystick
 float y = 0.3;  // Valor Y del joystick
 
@@ -153,27 +155,31 @@ int mover_robotM(int32_t c)
 //    TimerEnable(TIMER0_BASE, TIMER_A);                      // Habilitar el Timer0
 
     //D = (R * (thetaRight+thetaLeft)/2)
+    int realtheta = 0;
     thetatempF = c / R ;
     thetatempF = (thetatempF * 6) / (2 * M_PI) ;
     if(c > 0){
 //    uint32_t g_ulSystemClock3  = TimerValueGet(TIMER0_BASE, TIMER_A);
-
+    if (xQueueReceive(realThetaQueue, &realtheta, portMAX_DELAY) == pdPASS) {
+        forward();
     while(abs(thetatempF) > realtheta)
     {
-        forward();
+
     }
      stop();
-    realtheta = 0;
-    }
+    //realtheta = 0;
+    }}
     if(c < 0){
+        if (xQueueReceive(realThetaQueue, &realtheta, portMAX_DELAY) == pdPASS) {
+            rewind();
+
     while(abs(thetatempF) > realtheta)
     {
-        rewind();
     }
-    realtheta = 0;
+//    realtheta = 0;
     stop();
     }
-
+    }
     return 0;
 }
 
@@ -182,26 +188,29 @@ int girar_robotM(int32_t g)
 
     //theta = R/l (tethaLeft - tethaRight) ** que l es destancia de las reudas
     float thetatemp = 0 ;
+    int realtheta = 0;
     thetatemp = (g * M_PI) / 180 ;
     thetatemp = (L/R) * thetatemp;
     thetatemp = (thetatemp * 6) / (2 * M_PI) ;
     if(g > 0){
+    if (xQueueReceive(realThetaQueue, &realtheta, portMAX_DELAY) == pdPASS) {
+    right();
     while(abs(thetatemp) > (realtheta))
     {
-        right();
     }
-    realtheta = 0;
+//    realtheta = 0;
     stop();
-    }
+    }}
     if(g < 0){
+    if (xQueueReceive(realThetaQueue, &realtheta, portMAX_DELAY) == pdPASS) {
+    left();
     while(abs(thetatemp) >= (realtheta ))
     {
-        left();
     }
-    realtheta = 0;
+//    realtheta = 0;
     stop();
     }
-
+    }
     return 0;
 }
 int lazocerado()
@@ -279,12 +288,16 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
         if (distancia >= x1 && distancia < x2 )
         {
             // cm se enciende el led verde PF3
+            char *mensaje = ("X1\r\n") ;
+            UART1_SendString(mensaje);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000008);
 
         }
         else if (distancia >= x2 && distancia < x3 )
         {
                     // cm se enciende el led rojo PF1
+            char *mensaje = ("X2\r\n") ;
+            UART1_SendString(mensaje);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000002);
 
@@ -295,6 +308,9 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
         else if (distancia >= x3 && distancia <= x4 )
         {
                     //  cm se encienden ambos leds rojo y verde
+            char *mensaje = ("X3\r\n") ;
+            UART1_SendString(mensaje);
+
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 ,0x00000002);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3,0x00000008);
@@ -303,6 +319,9 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
         }
         else
         {
+            char *mensaje = ("X4\r\n") ;
+            UART1_SendString(mensaje);
+
             //los leds permanecen apagados
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0);
 
@@ -311,7 +330,7 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
        // UARTprintf("He leedo ADC0 %d\n ",muestras.chan2);
         //Encia el mensaje hacia QT
         //remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
-        UART1_SendStruct(MESSAGE_ADC_SAMPLE,(void *)&parameter, sizeof(parameter));
+        //UART1_SendStruct(MESSAGE_ADC_SAMPLE,(void *)&parameter, sizeof(parameter));
     }
 }
 
@@ -340,6 +359,8 @@ static portTASK_FUNCTION(Switch1Task,pvParameters)
 //                }
  //       lazocerado();//eligimos para lazo cerado
          //girar_robotM(90);//eligimos para probar mover
+        char *mensaje = ("S1\r\n") ;
+         UART1_SendString(mensaje);  // Envía el mensaje
          lazocerado();
 
        xSemaphoreTake(miSemaforo,portMAX_DELAY);
@@ -369,7 +390,8 @@ static portTASK_FUNCTION(Switch2Task,pvParameters)
 //                    VelocidadF3 = VelocidadF3 - 1;
 //                    activatePWM(VelocidadF2,VelocidadF3);
 //                }
-
+        char *mensaje = ("S2\r\n") ;
+         UART1_SendString(mensaje);  // Envía el mensaje
        mover_robotM(12);//eligimos para probar mover
         xSemaphoreTake(miSemaforo2,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
@@ -386,7 +408,10 @@ static portTASK_FUNCTION(Switch3Task,pvParameters)
     while(1)
     {
 //        configADC_DisparaADC(); //Dispara la conversion (por software)
+        char *mensaje = ("S3\r\n") ;
+         UART1_SendString(mensaje);  // Envía el mensaje
         lazocerado();
+
         xSemaphoreTake(miSemaforo3,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
         //UARTprintf("He puesto botton drecha ye mandado mensaje\n");
@@ -399,10 +424,17 @@ static portTASK_FUNCTION(wheelTask,pvParameters)
     //
     // Loop forever.
     //
+    int realtheta = 0;
+
     while(1)
     {
-        theta = 0;
         realtheta = realtheta + 1 ;
+        xQueueSend(realThetaQueue, &realtheta, portMAX_DELAY);
+        if(realtheta == 6 )
+        {
+            char *mensaje = ("one turn\r\n ") ;
+             UART1_SendString(mensaje);  // Envía el mensaje
+        }
         xSemaphoreTake(miSemaforo4,portMAX_DELAY);
     }
 }
@@ -554,6 +586,7 @@ int main(void)
     MAP_IntPrioritySet(INT_GPIOA,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
     MAP_GPIOPadConfigSet(GPIO_PORTA_BASE, GPIO_PIN_4,
                              GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+    MAP_GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_BOTH_EDGES);
     MAP_GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3| GPIO_PIN_4);
     MAP_IntEnable(INT_GPIOA);
     //para port B
@@ -577,7 +610,10 @@ int main(void)
 
 
     /********************************      Creacion de tareas *********************/
-
+    if(realThetaQueue = xQueueCreate(25, sizeof(int)) == NULL)
+        {
+        while(1);
+        }
     //Tarea del interprete de comandos (commands.c)
     if (initCommandLine(COMMAND_TASK_STACK,COMMAND_TASK_PRIORITY) != pdTRUE)
     {
@@ -590,7 +626,7 @@ int main(void)
     {
         while(1); //Inicializo la aplicacion de comunicacion con el PC (Remote). Ver fichero remotelink.c
     }
-    if (remotelinkesp_init(REMOTELINKesp_TASK_STACK,REMOTELINKesp_TASK_PRIORITY,messageReceived)!=pdTRUE)
+    if (remotelink_init(REMOTELINKesp_TASK_STACK,REMOTELINK_TASK_PRIORITY,messageReceived)!=pdTRUE)
     {
         while(1); //Inicializo la aplicacion de comunicacion con el esp (Remote). Ver fichero esp8266uart.c
     }
@@ -647,25 +683,11 @@ void GPIOFIntHandler(void){
     if (!(i32PinStatus & LEFT_BUTTON))
 
     {
-        // Mensaje de ejemplo
-
-
-            char *mensaje = ("Boton 1\r\n ") ;
-            UART1_SendString(mensaje);  // Envía el mensaje
-  //          SysCtlDelay(SysCtlClockGet() / 3);  // Espera un segundo (ajustar según frecuencia del sistema)
-
         xSemaphoreGiveFromISR(miSemaforo,&xHigherPriorityTaskWoken);
     }
 
     if (!(i32PinStatus & RIGHT_BUTTON))
     {
-        // Mensaje de ejemplo
-
-
-            char *mensaje = ("Boton 2\r\n ") ;
-            UART1_SendString(mensaje);  // Envía el mensaje
- //           SysCtlDelay(SysCtlClockGet() / 3);  // Espera un segundo (ajustar según frecuencia del sistema)
-
         xSemaphoreGiveFromISR(miSemaforo2,&xHigherPriorityTaskWoken);
 
     }
@@ -678,6 +700,7 @@ void GPIOFIntHandler(void){
 
 void counterroute(void){
 
+
     int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTA_BASE,GPIO_PIN_3 );
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     ROM_IntDisable(INT_GPIOA);
@@ -688,11 +711,10 @@ void counterroute(void){
     }
 
 
-    if (!(i32PinStatus & GPIO_PIN_3))
+    if ((i32PinStatus & GPIO_PIN_3))
     {
-        theta = 1;
-        char *mensaje = ("OnWhite\r\n ") ;
-         UART1_SendString(mensaje);  // Envía el mensaje
+        //theta = 1;
+        realtheta++;
         xSemaphoreGiveFromISR(miSemaforo4,&xHigherPriorityTaskWoken);
     }
 

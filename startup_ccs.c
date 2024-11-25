@@ -64,6 +64,7 @@ extern void counterroute(void);
 extern void esp32(void);
 extern void UARTStdioIntHandler(void);
 extern void USB0DeviceIntHandler(void);
+extern void UART1_Handler(void);
 //*****************************************************************************
 //
 // The vector table.  Note that the proper constructs must be placed on this to

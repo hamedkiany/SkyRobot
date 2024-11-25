@@ -32,15 +32,17 @@
 #include "drivers/configADC.h"
 #include <remotelink.h>
 #include <serialprotocol.h>
+//
+//void UART1_Init(void);
+//
+//void UART1_SendString(const char *str) ;
+//void UART1_SendBytes(const uint8_t *data, uint32_t sized);
+//void UART1_SendStruct(uint8_t message_type,void *parameter,int32_t paramsize);
 
 void UART1_Init(void);
-
-void UART1_SendString(const char *str) ;
-void UART1_SendBytes(const uint8_t *data, uint32_t sized);
-void UART1_SendStruct(uint8_t message_type,void *parameter,int32_t paramsize);
-int32_t remotelinkesp_sendMessage(uint8_t message_type,void *parameter,int32_t paramsize);
-static int32_t (* remotelinksp_messageReceived)(uint8_t message_type, void *parameters, int32_t parameterSize);
-static int32_t remotelinkesp_waitForMessage(uint8_t *frame, int32_t maxFrameSize);
-static portTASK_FUNCTION( remotelinkesp_Task, pvParameters );
-BaseType_t remotelinkesp_init(int32_t remotelinkesp_stack, int32_t remotelinkesp_priority, int32_t (* message_receive_esp_callback)(uint8_t message_type, void *parameters, int32_t parameterSize));
+void UART1_SendString(const char *str);
+void UART1_Handler(void);
+void UART1_ReceiveTask(void *pvParameters);
+void UART1_TransmitTask(void *pvParameters);
+void IntEspUart(void);
 #endif /* ESP8266uart_H_ */

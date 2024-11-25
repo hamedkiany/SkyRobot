@@ -439,6 +439,8 @@ static int Cmd_adc(int argc, char *argv[])
         UARTprintf(" ADC\r\n");
         configADC_LiveADC(&muestras);    //Espera y lee muestras del ADC (BLOQUEANTE)
         UARTprintf(" ADC %d\n",muestras.chan2);
+        UARTprintf(" ADC %d\n",muestras.chan1);
+        UARTprintf(" ADC %d\n",muestras.chan3);
 
 
 

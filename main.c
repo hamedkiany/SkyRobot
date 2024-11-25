@@ -32,6 +32,7 @@
 #include "drivers/rgb.h"
 #include "drivers/configADC.h"
 #include "commands.h"
+#include "drivers/esp8266uart.h"
 
 #include <remotelink.h>
 #include <serialprotocol.h>
@@ -40,6 +41,9 @@
 //parametros de funcionamiento de la tareas
 #define REMOTELINK_TASK_STACK (512)
 #define REMOTELINK_TASK_PRIORITY (tskIDLE_PRIORITY+2)
+#define REMOTELINKesp_TASK_STACK (512)
+#define REMOTELINKesp_TASK_PRIORITY (tskIDLE_PRIORITY+2)
+
 #define COMMAND_TASK_STACK (512)
 #define COMMAND_TASK_PRIORITY (tskIDLE_PRIORITY+1)
 #define ADC_TASK_STACK (512)
@@ -240,7 +244,7 @@ int lazocerado()
 static portTASK_FUNCTION(ADCTask,pvParameters)
 {
 
-    MuestrasADC muestras;
+    MuestrasADCLive muestras;
     MESSAGE_ADC_SAMPLE_PARAMETER parameter;
     double distancia = 1110 ;
 
@@ -274,12 +278,17 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
         }
         if (distancia >= x1 && distancia < x2 )
         {
+            char *mensaje = ("X1\r\n") ;
+            UART1_SendString(mensaje);
             // cm se enciende el led verde PF3
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000008);
         }
         else if (distancia >= x2 && distancia < x3 )
         {
                     // cm se enciende el led rojo PF1
+            char *mensaje = ("X2\r\n") ;
+            UART1_SendString(mensaje);
+
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0x00000002);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1,0x00000002);
@@ -288,17 +297,44 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
         else if (distancia >= x3 && distancia <= x4 )
         {
                     //  cm se encienden ambos leds rojo y verde
+            char *mensaje = ("X3\r\n") ;
+            UART1_SendString(mensaje);
+
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 ,0x00000002);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3,0x00000008);
         }
         else
         {
             //los leds permanecen apagados
+            char *mensaje = ("X4\r\n") ;
+            UART1_SendString(mensaje);
+
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0);
 
         }
+        if( parameter.chan1 > 1000 && parameter.chan3 > 1000)
+                {
+                    stop();
+                    char *mensaje = ("STOP\r\n") ;
+                    UART1_SendString(mensaje);
+                    right();
+                }
 
-       // UARTprintf("He leedo ADC0 %d\n ",muestras.chan2);
+                else if( parameter.chan1 > 900 && parameter.chan3 < 900)
+                {
+                    stop();
+                    char *mensaje = ("FORWARD\r\n") ;
+                    UART1_SendString(mensaje);
+                    forward();
+                }
+                else if( parameter.chan1 < 900 && parameter.chan3 > 900)
+                               {
+                                   stop();
+                                   char *mensaje = ("REWIND\r\n") ;
+                                   UART1_SendString(mensaje);
+                                   rewind();
+                               }
+        //UARTprintf("He leedo ADC0 %d\n ",muestras.chan1);
         //Encia el mensaje hacia QT
         //remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
     }
@@ -329,7 +365,10 @@ static portTASK_FUNCTION(Switch1Task,pvParameters)
 //                }
  //       lazocerado();//eligimos para lazo cerado
          //girar_robotM(90);//eligimos para probar mover
-         lazocerado();
+        char *mensaje = ("S1\r\n") ;
+        UART1_SendString(mensaje);  // Envía el mensaje
+
+       lazocerado();
 
        xSemaphoreTake(miSemaforo,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
@@ -358,6 +397,8 @@ static portTASK_FUNCTION(Switch2Task,pvParameters)
 //                    VelocidadF3 = VelocidadF3 - 1;
 //                    activatePWM(VelocidadF2,VelocidadF3);
 //                }
+        char *mensaje = ("S2\r\n") ;
+         UART1_SendString(mensaje);  // Envía el mensaje
 
        mover_robotM(12);//eligimos para probar mover
         xSemaphoreTake(miSemaforo2,portMAX_DELAY);
@@ -375,6 +416,9 @@ static portTASK_FUNCTION(Switch3Task,pvParameters)
     while(1)
     {
 //        configADC_DisparaADC(); //Dispara la conversion (por software)
+        char *mensaje = ("S3\r\n") ;
+         UART1_SendString(mensaje);  // Envía el mensaje
+
         lazocerado();
         xSemaphoreTake(miSemaforo3,portMAX_DELAY);
 //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
@@ -543,6 +587,8 @@ int main(void)
     MAP_IntPrioritySet(INT_GPIOA,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
     MAP_GPIOPadConfigSet(GPIO_PORTA_BASE, GPIO_PIN_4,
                              GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+    MAP_GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_BOTH_EDGES);
+
     MAP_GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3| GPIO_PIN_4);
     MAP_IntEnable(INT_GPIOA);
     //para port B
@@ -578,7 +624,10 @@ int main(void)
 	{
 	    while(1); //Inicializo la aplicacion de comunicacion con el PC (Remote). Ver fichero remotelink.c
 	}
-
+    if (remotelink_init(REMOTELINKesp_TASK_STACK,REMOTELINK_TASK_PRIORITY,messageReceived)!=pdTRUE)
+    {
+        while(1); //Inicializo la aplicacion de comunicacion con el esp (Remote). Ver fichero esp8266uart.c
+    }
 //	   miSemaforo = xSemaphoreCreateBinary();
 //	    miSemaforo2 = xSemaphoreCreateBinary();
 	//Para especificacion 2: Inicializa el ADC y crea una tarea...
@@ -602,6 +651,8 @@ int main(void)
         while(1);
     }
     activatePWM(75,75);
+    UART1_Init();
+
     if((xTaskCreate(wheelTask,(portCHAR *) "wheel",wheelTASKSTACKSIZE, NULL,wheelTASKPRIO, NULL) != pdTRUE))
     {
         while(1);
@@ -660,7 +711,7 @@ void counterroute(void){
     }
 
 
-    if (!(i32PinStatus & GPIO_PIN_3))
+    if ((i32PinStatus & GPIO_PIN_3))
     {
         theta = 1;
         xSemaphoreGiveFromISR(miSemaforo4,&xHigherPriorityTaskWoken);
