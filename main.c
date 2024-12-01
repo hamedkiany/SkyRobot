@@ -54,16 +54,17 @@
 #define SW2TASKSTACKSIZE (256)     // Tamaño de pila para la tarea SW2TASK
 #define SW3TASKPRIO (tskIDLE_PRIORITY+1)            // Prioridad para la tarea SW3TASK
 #define SW3TASKSTACKSIZE (256)     // Tamaño de pila para la tarea SW3TASK
-#define wheelTASKPRIO (tskIDLE_PRIORITY+1)            // Prioridad para la tarea wheelTASK
-#define wheelTASKSTACKSIZE (256)     // Tamaño de pila para la tarea wheelTASK
-
+#define wheelLTASKPRIO (tskIDLE_PRIORITY+1)            // Prioridad para la tarea wheelTASK
+#define wheelLTASKSTACKSIZE (256)     // Tamaño de pila para la tarea wheelTASK
+#define wheelRTASKPRIO (tskIDLE_PRIORITY+1)            // Prioridad para la tarea wheelTASK
+#define wheelRTASKSTACKSIZE (256)     // Tamaño de pila para la tarea wheelTASK
 //Globales
 volatile uint32_t g_ui32CPUUsage;
 volatile uint32_t g_ulSystemClock;
 volatile uint32_t g_ulSystemClock2;
 
 int VelocidadF2 = 75 , VelocidadF3 = 75,routcount = 0;
-SemaphoreHandle_t miSemaforo,miSemaforo2,miSemaforo3,miSemaforo4;
+SemaphoreHandle_t miSemaforo,miSemaforo2,miSemaforo3,miSemaforo4,miSemaforo5;
 float x = 0.5;  // Valor X del joystick
 float y = 0.3;  // Valor Y del joystick
 
@@ -78,6 +79,8 @@ int L = 10;
 volatile float whitecount = 0;
 volatile int theta = 0;
 volatile int realtheta=0;
+volatile int thetaR = 0;
+volatile int realthetaR=0;
 volatile float thetatempF = 0;
 
 
@@ -312,28 +315,28 @@ static portTASK_FUNCTION(ADCTask,pvParameters)
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3,0);
 
         }
-        if( parameter.chan1 > 1000 && parameter.chan3 > 1000)
-                {
-                    stop();
-                    char *mensaje = ("STOP\r\n") ;
-                    UART1_SendString(mensaje);
-                    right();
-                }
-
-                else if( parameter.chan1 > 900 && parameter.chan3 < 900)
-                {
-                    stop();
-                    char *mensaje = ("FORWARD\r\n") ;
-                    UART1_SendString(mensaje);
-                    forward();
-                }
-                else if( parameter.chan1 < 900 && parameter.chan3 > 900)
-                               {
-                                   stop();
-                                   char *mensaje = ("REWIND\r\n") ;
-                                   UART1_SendString(mensaje);
-                                   rewind();
-                               }
+//        if( parameter.chan1 > 1000 && parameter.chan3 > 1000)
+//                {
+//                    stop();
+//                    char *mensaje = ("STOP\r\n") ;
+//                    UART1_SendString(mensaje);
+//                    right();
+//                }
+//
+//                else if( parameter.chan1 > 900 && parameter.chan3 < 900)
+//                {
+//                    stop();
+//                    char *mensaje = ("FORWARD\r\n") ;
+//                    UART1_SendString(mensaje);
+//                    forward();
+//                }
+//                else if( parameter.chan1 < 900 && parameter.chan3 > 900)
+//                               {
+//                                   stop();
+//                                   char *mensaje = ("REWIND\r\n") ;
+//                                   UART1_SendString(mensaje);
+//                                   rewind();
+//                               }
         //UARTprintf("He leedo ADC0 %d\n ",muestras.chan1);
         //Encia el mensaje hacia QT
         //remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
@@ -426,7 +429,7 @@ static portTASK_FUNCTION(Switch3Task,pvParameters)
     }
 }
 
-static portTASK_FUNCTION(wheelTask,pvParameters)
+static portTASK_FUNCTION(wheelLTask,pvParameters)
 {
     xSemaphoreTake(miSemaforo4,portMAX_DELAY);
     //
@@ -437,6 +440,21 @@ static portTASK_FUNCTION(wheelTask,pvParameters)
         theta = 0;
         realtheta = realtheta + 1 ;
         xSemaphoreTake(miSemaforo4,portMAX_DELAY);
+    }
+}
+
+
+static portTASK_FUNCTION(wheelRTask,pvParameters)
+{
+    xSemaphoreTake(miSemaforo5,portMAX_DELAY);
+    //
+    // Loop forever.
+    //
+    while(1)
+    {
+        thetaR = 0;
+        realthetaR = realthetaR + 1 ;
+        xSemaphoreTake(miSemaforo5,portMAX_DELAY);
     }
 }
 
@@ -581,15 +599,15 @@ int main(void)
 //para port A
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
     MAP_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOA);
-    ROM_GPIODirModeSet(GPIO_PORTA_BASE, GPIO_PIN_3| GPIO_PIN_4, GPIO_DIR_MODE_IN);
+    ROM_GPIODirModeSet(GPIO_PORTA_BASE,GPIO_PIN_2| GPIO_PIN_3| GPIO_PIN_4, GPIO_DIR_MODE_IN);
     //MAP_GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4);
-    MAP_GPIOPinTypeGPIOInput(GPIO_PORTA_BASE,GPIO_PIN_3 | GPIO_PIN_4);
+    MAP_GPIOPinTypeGPIOInput(GPIO_PORTA_BASE,GPIO_PIN_2|GPIO_PIN_3 | GPIO_PIN_4);
     MAP_IntPrioritySet(INT_GPIOA,configMAX_SYSCALL_INTERRUPT_PRIORITY);//para añadir prioridad by HAMED
     MAP_GPIOPadConfigSet(GPIO_PORTA_BASE, GPIO_PIN_4,
                              GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
-    MAP_GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_BOTH_EDGES);
+    MAP_GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_2|GPIO_PIN_3, GPIO_BOTH_EDGES);
 
-    MAP_GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_3| GPIO_PIN_4);
+    MAP_GPIOIntEnable(GPIO_PORTA_BASE,GPIO_PIN_2|GPIO_PIN_3| GPIO_PIN_4);
     MAP_IntEnable(INT_GPIOA);
     //para port B
         MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
@@ -608,6 +626,7 @@ int main(void)
     miSemaforo2 = xSemaphoreCreateBinary();
     miSemaforo3 = xSemaphoreCreateBinary();
     miSemaforo4 = xSemaphoreCreateBinary();
+    miSemaforo5 = xSemaphoreCreateBinary();
 
 
 	/********************************      Creacion de tareas *********************/
@@ -653,11 +672,14 @@ int main(void)
     activatePWM(75,75);
     UART1_Init();
 
-    if((xTaskCreate(wheelTask,(portCHAR *) "wheel",wheelTASKSTACKSIZE, NULL,wheelTASKPRIO, NULL) != pdTRUE))
+    if((xTaskCreate(wheelLTask,(portCHAR *) "wheelL",wheelLTASKSTACKSIZE, NULL,wheelLTASKPRIO, NULL) != pdTRUE))
     {
         while(1);
     }
-
+    if((xTaskCreate(wheelRTask,(portCHAR *) "wheelR",wheelRTASKSTACKSIZE, NULL,wheelRTASKPRIO, NULL) != pdTRUE))
+    {
+        while(1);
+    }
 	//
 	// Arranca el  scheduler.  Pasamos a ejecutar las tareas que se hayan activado.
 	//
@@ -701,24 +723,29 @@ void GPIOFIntHandler(void){
 
 void counterroute(void){
 
-    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTA_BASE,GPIO_PIN_3 );
+    int32_t i32PinStatus=MAP_GPIOPinRead(GPIO_PORTA_BASE,GPIO_PIN_3 | GPIO_PIN_2 );
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     ROM_IntDisable(INT_GPIOA);
-    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3);
+//    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3 | GPIO_PIN_2);
     int ui8Delay = 0;
     for(ui8Delay = 0; ui8Delay < 16; ui8Delay++)
     {
     }
 
 
-    if ((i32PinStatus & GPIO_PIN_3))
+    if (!(i32PinStatus & GPIO_PIN_3))
     {
         theta = 1;
         xSemaphoreGiveFromISR(miSemaforo4,&xHigherPriorityTaskWoken);
     }
 
+    if (!(i32PinStatus & GPIO_PIN_2))
+    {
+        thetaR = 1;
+        xSemaphoreGiveFromISR(miSemaforo5,&xHigherPriorityTaskWoken);
+    }
     MAP_IntEnable(INT_GPIOA);
-    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3 );
+    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3 | GPIO_PIN_2 );
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 
 }
