@@ -30,6 +30,7 @@ void UART1_Init(void) {
     // Configura UART1 para una velocidad de 115200 baudios, 8 bits de datos, sin paridad, 1 bit de parada
     UARTConfigSetExpClk(UART1_BASE, SysCtlClockGet(), 115200,
                         (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+
 }
 
 void UART1_SendString(const char *str) {
