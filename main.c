@@ -91,13 +91,20 @@ volatile float thetatempF = 0;
 // Define states and events
 typedef enum {
     STATE_IDLE,
+    STATE_MAPPING,
     STATE_PROCESSING,
+    STATE_ATTACK,
     STATE_ERROR
 } State;
 
 typedef enum {
     EVENT_START,
     EVENT_STOP,
+    EVENT_OBSTACLE,
+    EVENT_OBSTACLE_ZONE,
+    EVENT_FRONT_BLACK,
+    EVENT_BACK_BLACK,
+    EVENT_ZONE_BLACK,
     EVENT_ERROR
 } Event;
 // Create a queue to hold events
@@ -282,11 +289,11 @@ int lazocerado()
 // Para especificacion 2. Esta tarea no tendria por que ir en main.c
 static portTASK_FUNCTION(ADCTask, pvParameters)
 {
-
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     MuestrasADCLive muestras;
     MESSAGE_ADC_SAMPLE_PARAMETER parameter;
     double distancia = 1110;
-
+    Event event;
     //
     // Bucle infinito, las tareas en FreeRTOS no pueden "acabar", deben "matarse" con la funcion xTaskDelete().
     //
@@ -319,14 +326,16 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
         {
 //            char *mensaje = ("X1\r\n");
 //            UART1_SendString(mensaje);
-            // cm se enciende el led verde PF3
+//            // cm se enciende el led verde PF3
+            event = EVENT_OBSTACLE_ZONE;
+            xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0x00000008);
         }
         else if (distancia >= x2 && distancia < x3)
         {
             // cm se enciende el led rojo PF1
-//            char *mensaje = ("X2\r\n");
-//            UART1_SendString(mensaje);
+            char *mensaje = ("X2\r\n");
+            UART1_SendString(mensaje);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0x00000002);
 
@@ -337,6 +346,8 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
             //  cm se encienden ambos leds rojo y verde
 //            char *mensaje = ("X3\r\n");
 //            UART1_SendString(mensaje);
+            event = EVENT_OBSTACLE;
+            xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0x00000002);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0x00000008);
@@ -344,33 +355,29 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
         else
         {
             // los leds permanecen apagados
-//            char *mensaje = ("X4\r\n");
-//            UART1_SendString(mensaje);
+            char *mensaje = ("X4\r\n");
+            UART1_SendString(mensaje);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
         }
-        //        if( parameter.chan1 > 1000 && parameter.chan3 > 1000)
-        //                {
-        //                    stop();
-        //                    char *mensaje = ("STOP\r\n") ;
-        //                    UART1_SendString(mensaje);
-        //                    right();
-        //                }
-        //
-        //                else if( parameter.chan1 > 900 && parameter.chan3 < 900)
-        //                {
-        //                    stop();
-        //                    char *mensaje = ("FORWARD\r\n") ;
-        //                    UART1_SendString(mensaje);
-        //                    forward();
-        //                }
-        //                else if( parameter.chan1 < 900 && parameter.chan3 > 900)
-        //                               {
-        //                                   stop();
-        //                                   char *mensaje = ("REWIND\r\n") ;
-        //                                   UART1_SendString(mensaje);
-        //                                   rewind();
-        //                               }
+                if( parameter.chan1 > 1000 && parameter.chan3 > 1000)
+                        {
+                            stop();
+                            event = EVENT_FRONT_BLACK;
+                            xQueueSend(eventQueue, &event, &xHigherPriorityTaskWoken);                        }
+
+                        else if( parameter.chan1 > 900 && parameter.chan3 < 900)
+                        {
+                            stop();
+                            event = EVENT_ZONE_BLACK;
+                            xQueueSend(eventQueue, &event, &xHigherPriorityTaskWoken);                        }
+
+                        else if( parameter.chan1 < 900 && parameter.chan3 > 900)
+                                       {
+                                           stop();
+                                           event = EVENT_BACK_BLACK;
+                                           xQueueSend(eventQueue, &event, &xHigherPriorityTaskWoken);
+                                       }
         // UARTprintf("He leedo ADC0 %d\n ",muestras.chan1);
         // Encia el mensaje hacia QT
         // remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
@@ -497,6 +504,7 @@ static portTASK_FUNCTION(wheelRTask, pvParameters)
 void stateMachineTask(void *pvParameters) {
     State currentState = STATE_IDLE;
     Event currentEvent;
+
     char *mensaje = ("EVENT_START");
 //    QueueHandle_t eventQueue = (QueueHandle_t)pvParameters;
 
@@ -509,9 +517,9 @@ void stateMachineTask(void *pvParameters) {
                         case EVENT_START:
                             // Transition to processing state
 
-                            UART1_SendString(mensaje); // Env�a el mensaje
+ //                           UART1_SendString(mensaje); // Env�a el mensaje
 
-                            currentState = STATE_PROCESSING;
+                            currentState = STATE_MAPPING;//STATE_PROCESSING;
                             // Perform actions for the new state
                             break;
                         case EVENT_ERROR:
@@ -522,26 +530,80 @@ void stateMachineTask(void *pvParameters) {
                             break;
                     }
                     break;
+                    case STATE_MAPPING:
+                        switch (currentEvent) {
+                            case EVENT_START:
+                                // Transition to processing state
 
+     //                           UART1_SendString(mensaje); // Env�a el mensaje
+
+                                currentState = STATE_PROCESSING;//STATE_PROCESSING;
+                                // Perform actions for the new state
+                                break;
+                            case EVENT_ERROR:
+                                // Transition to error state
+                                currentState = STATE_ERROR;
+                                break;
+                            default:
+                                break;
+                        }
+                        break;
                 case STATE_PROCESSING:
                     switch (currentEvent) {
-                        case EVENT_STOP:
+                    case EVENT_OBSTACLE:
+                        // Transition to idle state
+                        right();
+                        currentState = STATE_PROCESSING;
+                        break;
+                    case EVENT_OBSTACLE_ZONE:
+                        // Transition to error state
+                        rewind();
+                        currentState = STATE_PROCESSING;
+                        break;
+                        case EVENT_FRONT_BLACK:
                             // Transition to idle state
-                            currentState = STATE_IDLE;
+                            right();
+                            currentState = STATE_PROCESSING;
                             break;
-                        case EVENT_ERROR:
+                        case EVENT_BACK_BLACK:
                             // Transition to error state
-                            currentState = STATE_ERROR;
+                            rewind();
+                            currentState = STATE_PROCESSING;
                             break;
+                        case EVENT_ZONE_BLACK:
+                             // Transition to error state
+                             forward();
+                             currentState = STATE_PROCESSING;
+                             break;
                         default:
                             break;
                     }
                     break;
 
+                    case STATE_ATTACK:
+                        switch (currentEvent) {
+                            case EVENT_START:
+                                // Transition to processing state
+
+     //                           UART1_SendString(mensaje); // Env�a el mensaje
+
+                                currentState = STATE_PROCESSING;//STATE_PROCESSING;
+                                // Perform actions for the new state
+                                break;
+                            case EVENT_ERROR:
+                                // Transition to error state
+                                currentState = STATE_ERROR;
+                                break;
+                            default:
+                                break;
+                        }
+                        break;
+
                 case STATE_ERROR:
                     switch (currentEvent) {
                         case EVENT_STOP:
                             // Attempt recovery, transition to idle
+                            stop();
                             currentState = STATE_IDLE;
                             break;
                         default:
