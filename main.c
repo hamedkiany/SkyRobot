@@ -65,19 +65,19 @@ volatile uint32_t g_ui32CPUUsage;
 volatile uint32_t g_ulSystemClock;
 volatile uint32_t g_ulSystemClock2;
 
-int VelocidadF2 = 75, VelocidadF3 = 75, routcount = 0;
+volatile int VelocidadF2 = 75, VelocidadF3 = 75, routcount = 0;
 SemaphoreHandle_t miSemaforo, miSemaforo2, miSemaforo3, miSemaforo4, miSemaforo5;
 float x = 0.5; // Valor X del joystick
 float y = 0.3; // Valor Y del joystick
 
-int motor1 = 0;
-int motor2 = 0;
-float x1 = 5;
-float x2 = 10;
-float x3 = 15;
-float x4 = 20;
-float R = 2.5;
-int L = 10;
+volatile int motor1 = 0;
+volatile int motor2 = 0;
+volatile float x1 = 3;
+volatile float x2 = 7;
+volatile float x3 = 15;
+volatile float x4 = 20;
+volatile float R = 2.5;
+volatile int L = 10;
 volatile float whitecount = 0;
 volatile int theta = 0;
 volatile int realtheta = 0;
@@ -102,9 +102,11 @@ typedef enum {
     EVENT_STOP,
     EVENT_OBSTACLE,
     EVENT_OBSTACLE_ZONE,
-    EVENT_FRONT_BLACK,
-    EVENT_BACK_BLACK,
-    EVENT_ZONE_BLACK,
+    EVENT_OBSTACLE_TARGET,
+    EVENT_FRONT_WHITE,
+    EVENT_BACK_WHITE,
+    EVENT_ZONE_WHITE,
+
     EVENT_ERROR
 } Event;
 // Create a queue to hold events
@@ -289,7 +291,7 @@ int lazocerado()
 // Para especificacion 2. Esta tarea no tendria por que ir en main.c
 static portTASK_FUNCTION(ADCTask, pvParameters)
 {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+//    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     MuestrasADCLive muestras;
     MESSAGE_ADC_SAMPLE_PARAMETER parameter;
     double distancia = 1110;
@@ -327,8 +329,9 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
 //            char *mensaje = ("X1\r\n");
 //            UART1_SendString(mensaje);
 //            // cm se enciende el led verde PF3
-            event = EVENT_OBSTACLE_ZONE;
-            xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
+            event = EVENT_OBSTACLE_TARGET;
+            sendEvent(event);
+            //xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0x00000008);
         }
         else if (distancia >= x2 && distancia < x3)
@@ -336,6 +339,8 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
             // cm se enciende el led rojo PF1
             char *mensaje = ("X2\r\n");
             UART1_SendString(mensaje);
+            event = EVENT_OBSTACLE_ZONE;
+            sendEvent(event);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0x00000002);
 
@@ -347,7 +352,8 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
 //            char *mensaje = ("X3\r\n");
 //            UART1_SendString(mensaje);
             event = EVENT_OBSTACLE;
-            xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
+            sendEvent(event);
+            //xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0x00000002);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0x00000008);
@@ -355,29 +361,29 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
         else
         {
             // los leds permanecen apagados
-            char *mensaje = ("X4\r\n");
-            UART1_SendString(mensaje);
+//            char *mensaje = ("X4\r\n");
+//            UART1_SendString(mensaje);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
         }
-                if( parameter.chan1 > 1000 && parameter.chan3 > 1000)
-                        {
-                            stop();
-                            event = EVENT_FRONT_BLACK;
-                            xQueueSend(eventQueue, &event, &xHigherPriorityTaskWoken);                        }
-
-                        else if( parameter.chan1 > 900 && parameter.chan3 < 900)
-                        {
-                            stop();
-                            event = EVENT_ZONE_BLACK;
-                            xQueueSend(eventQueue, &event, &xHigherPriorityTaskWoken);                        }
-
-                        else if( parameter.chan1 < 900 && parameter.chan3 > 900)
-                                       {
-                                           stop();
-                                           event = EVENT_BACK_BLACK;
-                                           xQueueSend(eventQueue, &event, &xHigherPriorityTaskWoken);
-                                       }
+        if( parameter.chan1 > 900 && parameter.chan3 > 900)
+        {
+            stop();
+            event = EVENT_ZONE_WHITE;
+            sendEvent(event);
+        }
+        else if( parameter.chan1 > 900 && parameter.chan3 < 900)
+        {
+            stop();
+            event = EVENT_FRONT_WHITE;
+            sendEvent(event);
+        }
+        else if( parameter.chan1 < 900 && parameter.chan3 > 900)
+       {
+           stop();
+           event = EVENT_BACK_WHITE;
+           sendEvent(event);
+       }
         // UARTprintf("He leedo ADC0 %d\n ",muestras.chan1);
         // Encia el mensaje hacia QT
         // remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
@@ -412,7 +418,7 @@ static portTASK_FUNCTION(Switch1Task, pvParameters)
         char *mensaje = ("S1\r\n");
         UART1_SendString(mensaje); // Env�a el mensaje
 
-        lazocerado();
+        //lazocerado();
 
         xSemaphoreTake(miSemaforo, portMAX_DELAY);
         //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
@@ -463,7 +469,7 @@ static portTASK_FUNCTION(Switch3Task, pvParameters)
         char *mensaje = ("S3\r\n");
         UART1_SendString(mensaje); // Env�a el mensaje
 
-        lazocerado();
+        //lazocerado();
         xSemaphoreTake(miSemaforo3, portMAX_DELAY);
         //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
         // UARTprintf("He puesto botton drecha ye mandado mensaje\n");
@@ -505,7 +511,7 @@ void stateMachineTask(void *pvParameters) {
     State currentState = STATE_IDLE;
     Event currentEvent;
 
-    char *mensaje = ("EVENT_START");
+//    char *mensaje = ("EVENT_START");
 //    QueueHandle_t eventQueue = (QueueHandle_t)pvParameters;
 
     for (;;) {
@@ -534,7 +540,7 @@ void stateMachineTask(void *pvParameters) {
                         switch (currentEvent) {
                             case EVENT_START:
                                 // Transition to processing state
-
+                                girar_robotM(360);
      //                           UART1_SendString(mensaje); // Env�a el mensaje
 
                                 currentState = STATE_PROCESSING;//STATE_PROCESSING;
@@ -552,7 +558,7 @@ void stateMachineTask(void *pvParameters) {
                     switch (currentEvent) {
                     case EVENT_OBSTACLE:
                         // Transition to idle state
-                        right();
+                        girar_robotM(90);
                         currentState = STATE_PROCESSING;
                         break;
                     case EVENT_OBSTACLE_ZONE:
@@ -560,17 +566,17 @@ void stateMachineTask(void *pvParameters) {
                         rewind();
                         currentState = STATE_PROCESSING;
                         break;
-                        case EVENT_FRONT_BLACK:
+                        case EVENT_FRONT_WHITE:
                             // Transition to idle state
-                            right();
+                            girar_robotM(90);
                             currentState = STATE_PROCESSING;
                             break;
-                        case EVENT_BACK_BLACK:
+                        case EVENT_BACK_WHITE:
                             // Transition to error state
                             rewind();
                             currentState = STATE_PROCESSING;
                             break;
-                        case EVENT_ZONE_BLACK:
+                        case EVENT_ZONE_WHITE:
                              // Transition to error state
                              forward();
                              currentState = STATE_PROCESSING;
@@ -679,8 +685,8 @@ static int32_t messageReceived(uint8_t message_type, void *parameters, int32_t p
 
         if (check_and_extract_command_param(parameters, parameterSize, &parametro, sizeof(parametro)) > 0)
         {
-            joystickToMotor(parametro.x, parametro.y, &motor1, &motor2);
-            activatePWM(motor1, motor2);
+//            joystickToMotor(parametro.x, parametro.y, &motor1, &motor2);
+//            activatePWM(motor1, motor2);
         }
         else
         {

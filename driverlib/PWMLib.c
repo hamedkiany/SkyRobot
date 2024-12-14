@@ -88,7 +88,7 @@ int rewind()
 }
 int right()
 {
-    configPWM1(75);
+    configPWM1(95);
     configPWM2(95);
 
     return 0;
@@ -96,7 +96,7 @@ int right()
 int left()
 {
     configPWM1(55);
-    configPWM2(75);
+    configPWM2(55);
 
     return 0;
 }
