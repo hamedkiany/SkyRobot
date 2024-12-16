@@ -147,10 +147,8 @@ void configADC_Timer(void)
 }
 void configADC_LiveADC(MuestrasADCLive *datos)
 {
-//    UARTprintf("configADC_LeeADC(MuestrasADC *datos) en configADC antes \r\n");
 
     xQueueReceive(cola_adc_live, datos, portMAX_DELAY);
-//  UARTprintf("configADC_LeeADC(MuestrasADC *datos) en configADC despues \r\n");
 }
 void configADC_ISR(void)
 {

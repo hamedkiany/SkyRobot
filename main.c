@@ -67,15 +67,13 @@ volatile uint32_t g_ulSystemClock2;
 
 volatile int VelocidadF2 = 75, VelocidadF3 = 75, routcount = 0;
 SemaphoreHandle_t miSemaforo, miSemaforo2, miSemaforo3, miSemaforo4, miSemaforo5;
-float x = 0.5; // Valor X del joystick
-float y = 0.3; // Valor Y del joystick
 
 volatile int motor1 = 0;
 volatile int motor2 = 0;
 volatile float x1 = 3;
 volatile float x2 = 7;
-volatile float x3 = 15;
-volatile float x4 = 20;
+volatile float x3 = 18;
+volatile float x4 = 30;
 volatile float R = 2.5;
 volatile int L = 10;
 volatile float whitecount = 0;
@@ -84,12 +82,13 @@ volatile int realtheta = 0;
 volatile int thetaR = 0;
 volatile int realthetaR = 0;
 volatile float thetatempF = 0;
-
-
-//variable for state machine
+volatile float RadioCircle = 20;
+volatile     float thetatemp = 0;
+// variable for state machine
 
 // Define states and events
-typedef enum {
+typedef enum
+{
     STATE_IDLE,
     STATE_MAPPING,
     STATE_PROCESSING,
@@ -97,35 +96,58 @@ typedef enum {
     STATE_ERROR
 } State;
 
-typedef enum {
+typedef enum
+{
     EVENT_START,
     EVENT_STOP,
+    EVENT_OBSTACLE_SEARCH,
     EVENT_OBSTACLE,
     EVENT_OBSTACLE_ZONE,
     EVENT_OBSTACLE_TARGET,
     EVENT_FRONT_WHITE,
     EVENT_BACK_WHITE,
     EVENT_ZONE_WHITE,
-
     EVENT_ERROR
 } Event;
 // Create a queue to hold events
 QueueHandle_t eventQueue;
 
+// Variables de posici�n actual
+float posX = 0.0;
+float posY = 0.0;
+float angulo_actual = 0.0; // En grados
+
+// Prototipos de funciones void mover(float cm); void girar(float grados);
+
+// Funci�n para actualizar la posici�n del robot
+void actualizarPosicion(float distancia)
+{
+    float angulo_radianes = angulo_actual * M_PI / 180.0;
+    posX += distancia * cos(angulo_radianes);
+    posY += distancia * sin(angulo_radianes);
+}
+
+// Funci�n para verificar si est� dentro del c�rculo
+bool dentroDelCirculo()
+{
+    float distancia_centro = sqrt(posX * posX + posY * posY);
+    return distancia_centro <= RadioCircle;
+}
+
 // Function to send an event to the queue
-void sendEvent(Event event) {
-    if (eventQueue == NULL) {
+void sendEvent(Event event)
+{
+    if (eventQueue == NULL)
+    {
         // Ensure the queue is created before using
-//        printf("Event queue is not initialized\n");
         return;
     }
 
-    if (xQueueSend(eventQueue, &event, portMAX_DELAY) != pdPASS) {
+    if (xQueueSend(eventQueue, &event, portMAX_DELAY) != pdPASS)
+    {
         // Handle the error, e.g., log an error message
-//        printf("Failed to send event to queue\n");
     }
 }
-
 
 //*****************************************************************************
 //
@@ -194,17 +216,11 @@ void vApplicationMallocFailedHook(void)
 
 int mover_robotM(int32_t c)
 {
-    //    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);           // Habilitar el m�dulo de Timer0
-    //    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP);     // Configurar como temporizador de cuenta ascendente de 32 bits
-    //    TimerLoadSet(TIMER0_BASE, TIMER_A, SysCtlClockGet() - 1); // Configurar para que cuente cada segundo
-    //    TimerEnable(TIMER0_BASE, TIMER_A);                      // Habilitar el Timer0
 
-    // D = (R * (thetaRight+thetaLeft)/2)
     thetatempF = c / R;
     thetatempF = (thetatempF * 6) / (2 * M_PI);
     if (c > 0)
     {
-        //    uint32_t g_ulSystemClock3  = TimerValueGet(TIMER0_BASE, TIMER_A);
 
         while (abs(thetatempF) > realtheta)
         {
@@ -229,11 +245,9 @@ int mover_robotM(int32_t c)
 int girar_robotM(int32_t g)
 {
 
-    // theta = R/l (tethaLeft - tethaRight) ** que l es destancia de las reudas
-    float thetatemp = 0;
     thetatemp = (g * M_PI) / 180;
     thetatemp = (L / R) * thetatemp;
-    thetatemp = (thetatemp * 6) / (2 * M_PI);
+    thetatemp = (thetatemp * 3) / (2 * M_PI);
     if (g > 0)
     {
         while (abs(thetatemp) > (realtheta))
@@ -288,10 +302,8 @@ int lazocerado()
 //
 //*****************************************************************************
 
-// Para especificacion 2. Esta tarea no tendria por que ir en main.c
 static portTASK_FUNCTION(ADCTask, pvParameters)
 {
-//    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     MuestrasADCLive muestras;
     MESSAGE_ADC_SAMPLE_PARAMETER parameter;
     double distancia = 1110;
@@ -326,65 +338,53 @@ static portTASK_FUNCTION(ADCTask, pvParameters)
         }
         if (distancia >= x1 && distancia < x2)
         {
-//            char *mensaje = ("X1\r\n");
-//            UART1_SendString(mensaje);
-//            // cm se enciende el led verde PF3
             event = EVENT_OBSTACLE_TARGET;
             sendEvent(event);
-            //xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0x00000008);
         }
         else if (distancia >= x2 && distancia < x3)
         {
-            // cm se enciende el led rojo PF1
-            char *mensaje = ("X2\r\n");
-            UART1_SendString(mensaje);
             event = EVENT_OBSTACLE_ZONE;
             sendEvent(event);
-
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0x00000002);
-
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0x00000002);
         }
         else if (distancia >= x3 && distancia <= x4)
         {
-            //  cm se encienden ambos leds rojo y verde
-//            char *mensaje = ("X3\r\n");
-//            UART1_SendString(mensaje);
             event = EVENT_OBSTACLE;
             sendEvent(event);
-            //xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
-
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0x00000002);
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0x00000008);
         }
-        else
+        else if (distancia >= x4 && distancia <= 2 * x4)
         {
-            // los leds permanecen apagados
-//            char *mensaje = ("X4\r\n");
-//            UART1_SendString(mensaje);
+            event = EVENT_OBSTACLE_SEARCH;
+            sendEvent(event);
 
             GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3, 0);
         }
-        if( parameter.chan1 > 900 && parameter.chan3 > 900)
+        if (parameter.chan1 > 900 && parameter.chan3 > 900)
         {
             stop();
             event = EVENT_ZONE_WHITE;
             sendEvent(event);
         }
-        else if( parameter.chan1 > 900 && parameter.chan3 < 900)
+        else if (parameter.chan1 > 900 && parameter.chan3 < 900)
+        {
+            stop();
+            event = EVENT_BACK_WHITE;
+            sendEvent(event);
+        }
+        else if (parameter.chan1 < 900 && parameter.chan3 > 900)
         {
             stop();
             event = EVENT_FRONT_WHITE;
             sendEvent(event);
         }
-        else if( parameter.chan1 < 900 && parameter.chan3 > 900)
-       {
-           stop();
-           event = EVENT_BACK_WHITE;
-           sendEvent(event);
-       }
-        // UARTprintf("He leedo ADC0 %d\n ",muestras.chan1);
+        else
+        {
+
+        }
         // Encia el mensaje hacia QT
         // remotelink_sendMessage(MESSAGE_ADC_SAMPLE,(void *)&parameter,sizeof(parameter));
     }
@@ -400,29 +400,11 @@ static portTASK_FUNCTION(Switch1Task, pvParameters)
     //
     while (1)
     {
-        //        MESSAGE_SW_PARAMETER parametro;
-        //        parametro.sw.number = 1;
-        //        //parametro.sw.state = 1;
-        //        if (VelocidadF2 > 74 && VelocidadF2 < 101){
-        //            if(!(VelocidadF2 == 75))
-        //                    VelocidadF2 = VelocidadF2 - 1;
-        //            activatePWM(VelocidadF2,VelocidadF3);
-        //        }
-        //        if (VelocidadF3 > 49 && VelocidadF3 < 76){
-        //                    if(!(VelocidadF2 == 75))
-        //                            VelocidadF3 = VelocidadF3 + 1;
-        //                    activatePWM(VelocidadF2,VelocidadF3);
-        //                }
-        //       lazocerado();//eligimos para lazo cerado
-        // girar_robotM(90);//eligimos para probar mover
         char *mensaje = ("S1\r\n");
         UART1_SendString(mensaje); // Env�a el mensaje
-
-        //lazocerado();
-
+        // lazocerado();
         xSemaphoreTake(miSemaforo, portMAX_DELAY);
         //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
-        //       UARTprintf("He puesto botton ye mandado mensaje\n");
     }
 }
 
@@ -432,28 +414,16 @@ static portTASK_FUNCTION(Switch2Task, pvParameters)
     //
     // Loop forever.
     //
+    Event event;
     while (1)
     {
-        //        MESSAGE_SW_PARAMETER parametro;
-        //        parametro.sw.number = 2;
-        //        //parametro.sw.state = 1;
-        //        if (VelocidadF2 > 74 && VelocidadF2 < 101){
-        //            if(!(VelocidadF2 == 100))
-        //                    VelocidadF2 = VelocidadF2 + 1;
-        //                    activatePWM(VelocidadF2,VelocidadF3);
-        //                }
-        //        if (VelocidadF3 > 49 && VelocidadF3 < 76){
-        //            if(!(VelocidadF3 == 50))
-        //                    VelocidadF3 = VelocidadF3 - 1;
-        //                    activatePWM(VelocidadF2,VelocidadF3);
-        //                }
         char *mensaje = ("S2\r\n");
         UART1_SendString(mensaje); // Env�a el mensaje
+        event = EVENT_START;
+        sendEvent(event);
 
-        mover_robotM(12); // eligimos para probar mover
         xSemaphoreTake(miSemaforo2, portMAX_DELAY);
         //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
-        // UARTprintf("He puesto botton drecha ye mandado mensaje\n");
     }
 }
 
@@ -466,13 +436,12 @@ static portTASK_FUNCTION(Switch3Task, pvParameters)
     while (1)
     {
         //        configADC_DisparaADC(); //Dispara la conversion (por software)
-        char *mensaje = ("S3\r\n");
+        char *mensaje = ("line\r\n");
         UART1_SendString(mensaje); // Env�a el mensaje
-
-        //lazocerado();
+        stop();
+        // lazocerado();
         xSemaphoreTake(miSemaforo3, portMAX_DELAY);
         //        remotelink_sendMessage(MESSAGE_SW,&parametro,sizeof(parametro));
-        // UARTprintf("He puesto botton drecha ye mandado mensaje\n");
     }
 }
 
@@ -503,153 +472,216 @@ static portTASK_FUNCTION(wheelRTask, pvParameters)
         xSemaphoreTake(miSemaforo5, portMAX_DELAY);
     }
 }
-
-//state machine task
-
 // State machine task
-void stateMachineTask(void *pvParameters) {
+void stateMachineTask(void *pvParameters)
+{
     State currentState = STATE_IDLE;
     Event currentEvent;
-
-//    char *mensaje = ("EVENT_START");
-//    QueueHandle_t eventQueue = (QueueHandle_t)pvParameters;
-
-    for (;;) {
+    char *mensaje = " ";
+    int Obsta = 0, ObstAt = 0;
+    for (;;)
+    {
         // Wait for an event
-        if (xQueueReceive(eventQueue, &currentEvent, portMAX_DELAY) == pdPASS) {
-            switch (currentState) {
-                case STATE_IDLE:
-                    switch (currentEvent) {
-                        case EVENT_START:
-                            // Transition to processing state
-
- //                           UART1_SendString(mensaje); // Env�a el mensaje
-
-                            currentState = STATE_MAPPING;//STATE_PROCESSING;
-                            // Perform actions for the new state
-                            break;
-                        case EVENT_ERROR:
-                            // Transition to error state
-                            currentState = STATE_ERROR;
-                            break;
-                        default:
-                            break;
-                    }
+        if (xQueueReceive(eventQueue, &currentEvent, portMAX_DELAY) == pdPASS)
+        {
+            switch (currentState)
+            {
+            case STATE_IDLE:
+                switch (currentEvent)
+                {
+                case EVENT_START:
+                    mensaje = ("Mapping");
+                    UART1_SendString("Mapping\r\n"); // Env�a el mensaje
+                    mover_robotM(RadioCircle); // voy a centro
+                    sendEvent(EVENT_START);
+                    currentState = STATE_MAPPING; // STATE_PROCESSING;
                     break;
-                    case STATE_MAPPING:
-                        switch (currentEvent) {
-                            case EVENT_START:
-                                // Transition to processing state
-                                girar_robotM(360);
-     //                           UART1_SendString(mensaje); // Env�a el mensaje
-
-                                currentState = STATE_PROCESSING;//STATE_PROCESSING;
-                                // Perform actions for the new state
-                                break;
-                            case EVENT_ERROR:
-                                // Transition to error state
-                                currentState = STATE_ERROR;
-                                break;
-                            default:
-                                break;
-                        }
-                        break;
-                case STATE_PROCESSING:
-                    switch (currentEvent) {
-                    case EVENT_OBSTACLE:
-                        // Transition to idle state
-                        girar_robotM(90);
-                        currentState = STATE_PROCESSING;
-                        break;
-                    case EVENT_OBSTACLE_ZONE:
-                        // Transition to error state
-                        rewind();
-                        currentState = STATE_PROCESSING;
-                        break;
-                        case EVENT_FRONT_WHITE:
-                            // Transition to idle state
-                            girar_robotM(90);
-                            currentState = STATE_PROCESSING;
-                            break;
-                        case EVENT_BACK_WHITE:
-                            // Transition to error state
-                            rewind();
-                            currentState = STATE_PROCESSING;
-                            break;
-                        case EVENT_ZONE_WHITE:
-                             // Transition to error state
-                             forward();
-                             currentState = STATE_PROCESSING;
-                             break;
-                        default:
-                            break;
-                    }
+                case EVENT_ERROR:
+                    // Transition to error state
+                    currentState = STATE_ERROR;
                     break;
+                default:
+                    // sendEvent(EVENT_START);
+                    break;
+                }
+                break;
+            case STATE_MAPPING:
+                switch (currentEvent)
+                {
+                case EVENT_START:
+                    // Transition to processing state
+                    mensaje = ("girar360");
+                    UART1_SendString("girar360\r\n"); // Env�a el mensaje
 
-                    case STATE_ATTACK:
-                        switch (currentEvent) {
-                            case EVENT_START:
-                                // Transition to processing state
+                    girar_robotM(180);
+                    sendEvent(EVENT_OBSTACLE_SEARCH);
+                    currentState = STATE_PROCESSING; // STATE_PROCESSING;
+                    // Perform actions for the new state
+                    break;
+                case EVENT_ERROR:
+                    // Transition to error state
+                    currentState = STATE_ERROR;
+                    break;
+                default:
+                    //sendEvent(EVENT_START);
 
-     //                           UART1_SendString(mensaje); // Env�a el mensaje
+                    break;
+                }
+                break;
+            case STATE_PROCESSING:
+                switch (currentEvent)
+                {
+                case EVENT_OBSTACLE_SEARCH:
+                    mensaje = ("girar360");
+                    UART1_SendString("EVENT_OBSTACLE_SEARCH\r\n"); // Env�a el mensaje
 
-                                currentState = STATE_PROCESSING;//STATE_PROCESSING;
-                                // Perform actions for the new state
-                                break;
-                            case EVENT_ERROR:
-                                // Transition to error state
-                                currentState = STATE_ERROR;
-                                break;
-                            default:
-                                break;
-                        }
-                        break;
+                    girar_robotM(180);
+                    mover_robotM(10);
+                    //sendEvent(EVENT_OBSTACLE_SEARCH);
+                    //currentState = STATE_PROCESSING; // STATE_PROCESSING;
+                    break;
+                case EVENT_OBSTACLE:
+                    // Transition to idle state
 
-                case STATE_ERROR:
-                    switch (currentEvent) {
-                        case EVENT_STOP:
-                            // Attempt recovery, transition to idle
-                            stop();
-                            currentState = STATE_IDLE;
-                            break;
-                        default:
-                            // Stay in error state
-                            break;
+                    Obsta = Obsta + 1;
+                    if (Obsta == 2)
+                    {
+                        actualizarPosicion(10);
+                        mover_robotM(10);
+                        mensaje = ("mover 10 pro");
+                        UART1_SendString("EVENT_OBSTACLE\r\n"); // Env�a el mensaje
+                        Obsta = 0;
                     }
+                    //currentState = STATE_PROCESSING;
+                    break;
+                case EVENT_OBSTACLE_ZONE:
+                    // Transition to error state
+                    actualizarPosicion(5);
+                    mover_robotM(5);
+                    mensaje = ("mover 5 pro");
+                    UART1_SendString("mover 5 pro\r\n"); // Env�a el mensaje
+
+                    //currentState = STATE_PROCESSING;
+                    break;
+                case EVENT_FRONT_WHITE:
+                    // Transition to idle state
+                    actualizarPosicion(-5);
+                    mover_robotM(-5);
+                    mensaje = ("mover -5 pro");
+                    UART1_SendString("mover -5 pro\r\n"); // Env�a el mensaje
+                    //sendEvent(EVENT_OBSTACLE_SEARCH);
+                    //currentState = STATE_PROCESSING;
+                    break;
+                case EVENT_BACK_WHITE:
+                    // Transition to error state
+                    actualizarPosicion(10);
+                    mover_robotM(10);
+                    mensaje = ("mover 5 2 pro");
+                    UART1_SendString("mover 5 2 pro\r\n"); // Env�a el mensaje
+                    //sendEvent(EVENT_OBSTACLE_SEARCH);
+                    //currentState = STATE_PROCESSING;
+                    break;
+                case EVENT_ZONE_WHITE:
+                    // Transition to error state
+                    stop();
+                    girar_robotM(-20);
+                    mensaje = ("girar 45  pro");
+                    UART1_SendString("girar 45  pro\r\n"); // Env�a el mensaje
+                    //mover_robotM(5);
+                    //sendEvent(EVENT_OBSTACLE_SEARCH);
+                    //currentState = STATE_PROCESSING;
+                    break;
+                case EVENT_OBSTACLE_TARGET:
+                    sendEvent(EVENT_OBSTACLE_TARGET);
+                    currentState = STATE_ATTACK;
+
                     break;
 
                 default:
-                    // Handle unexpected state
+                     //sendEvent(EVENT_OBSTACLE_SEARCH);
+                     break;
+                }
+                break;
+
+            case STATE_ATTACK:
+                switch (currentEvent)
+                {
+                case EVENT_OBSTACLE_TARGET:
+                    // Transition to processing state
+                    forward();
+                    ObstAt = ObstAt + 1;
+                    if (ObstAt == 4)
+                    {
+                        sendEvent(EVENT_OBSTACLE_SEARCH);
+                        currentState = STATE_PROCESSING;
+                        ObstAt = 0;
+                    }
+                    //currentState = STATE_ATTACK; // STATE_ATTACK;
+                    // Perform actions for the new state
+                    break;
+                case EVENT_FRONT_WHITE:
+                    // Transition to idle state
+                    actualizarPosicion(-5);
+                    mover_robotM(-5);
+                    //sendEvent(EVENT_OBSTACLE_SEARCH);
+
+                    currentState = STATE_PROCESSING;
+                    break;
+                case EVENT_BACK_WHITE:
+                    // Transition to error state
+                    actualizarPosicion(10);
+                    mover_robotM(10);
+                    //sendEvent(EVENT_OBSTACLE_SEARCH);
+
+                    currentState = STATE_PROCESSING;
+                    break;
+                case EVENT_ZONE_WHITE:
+                    // Transition to error state
+                    stop();
+                    girar_robotM(30);
+                    //sendEvent(EVENT_OBSTACLE_SEARCH);
+                    //mover_robotM(10);
+                    currentState = STATE_PROCESSING;
+                    break;
+
+                case EVENT_ERROR:
+                    // Transition to error state
+                    currentState = STATE_ERROR;
+                    break;
+                default:
+                    // sendEvent(EVENT_START);
+                    // currentState = STATE_IDLE;
+
+                    break;
+                }
+                break;
+
+            case STATE_ERROR:
+                switch (currentEvent)
+                {
+                case EVENT_STOP:
+                    // Attempt recovery, transition to idle
+                    stop();
+                    sendEvent(EVENT_START);
                     currentState = STATE_IDLE;
                     break;
+                default:
+                    // Stay in error state
+                    sendEvent(EVENT_START);
+                    currentState = STATE_IDLE;
+
+                    break;
+                }
+                break;
+
+            default:
+                // Handle unexpected state
+//                sendEvent(EVENT_START);
+//                currentState = STATE_IDLE;
+                break;
             }
         }
     }
-}
-
-// Funci�n para mapear los valores de un rango a otro
-float map(float value, float in_min, float in_max, float out_min, float out_max)
-{
-    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-// Funci�n para convertir los valores del joystick (x, y) en se�ales para los motores
-void joystickToMotor(float x, float y, int *motor1, int *motor2)
-{
-    // Normalizar el valor del joystick (x, y) para que est� en el rango [-1, 1]
-    float magnitude = sqrt(x * x + y * y);
-    if (magnitude > 1)
-    {
-        x /= magnitude;
-        y /= magnitude;
-    }
-
-    // Convertir el valor de 'x' del joystick para el rango de los motores (50-100)
-    // Para motor1 (gira en un sentido)
-    *motor1 = (int)map(x, -1.0, 1.0, 50, 100);
-
-    // Para motor2 (gira en sentido contrario al motor1)
-    *motor2 = (int)map(x, -1.0, 1.0, 100, 50);
 }
 
 // Funcion callback que procesa los mensajes recibidos desde el PC (ejecuta las acciones correspondientes a las ordenes recibidas)
@@ -685,8 +717,6 @@ static int32_t messageReceived(uint8_t message_type, void *parameters, int32_t p
 
         if (check_and_extract_command_param(parameters, parameterSize, &parametro, sizeof(parametro)) > 0)
         {
-//            joystickToMotor(parametro.x, parametro.y, &motor1, &motor2);
-//            activatePWM(motor1, motor2);
         }
         else
         {
@@ -695,20 +725,6 @@ static int32_t messageReceived(uint8_t message_type, void *parameters, int32_t p
     }
     break;
 
-        //        case MESSAGE_LED_PWM_BRIGHTNESS:
-        //        {
-        //            MESSAGE_LED_PWM_BRIGHTNESS_PARAMETER parametro;
-        //
-        //            if (check_and_extract_command_param(parameters, parameterSize, &parametro, sizeof(parametro))>0)
-        //            {
-        //                RGBIntensitySet(parametro.rIntensity);
-        //            }
-        //            else
-        //            {
-        //                status=PROT_ERROR_INCORRECT_PARAM_SIZE; //Devuelve un error
-        //            }
-        //        }
-        //        break;
     case MESSAGE_ADC_SAMPLE:
     {
         configADC_DisparaADC(); // Dispara la conversion (por software)
@@ -779,13 +795,14 @@ int main(void)
     // para port B
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
     MAP_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOB);
-    ROM_GPIODirModeSet(GPIO_PORTB_BASE, GPIO_PIN_2, GPIO_DIR_MODE_IN);
+    ROM_GPIODirModeSet(GPIO_PORTB_BASE, GPIO_PIN_2 | GPIO_PIN_3, GPIO_DIR_MODE_IN);
     // MAP_GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_4);
-    MAP_GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_2);
+    MAP_GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_2 | GPIO_PIN_3);
     MAP_IntPrioritySet(INT_GPIOB, configMAX_SYSCALL_INTERRUPT_PRIORITY); // para a�adir prioridad by HAMED
-    MAP_GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_2,
-                         GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
-    MAP_GPIOIntEnable(GPIO_PORTB_BASE, GPIO_PIN_2);
+//    MAP_GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_2,
+//                         GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+    MAP_GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_2 | GPIO_PIN_3, GPIO_RISING_EDGE);
+    MAP_GPIOIntEnable(GPIO_PORTB_BASE, GPIO_PIN_2 | GPIO_PIN_3);
     MAP_IntEnable(INT_GPIOB);
 
     miSemaforo = xSemaphoreCreateBinary();
@@ -810,14 +827,12 @@ int main(void)
         while (1)
             ; // Inicializo la aplicacion de comunicacion con el PC (Remote). Ver fichero remotelink.c
     }
-    if (remotelink_init(REMOTELINKesp_TASK_STACK, REMOTELINK_TASK_PRIORITY, messageReceived) != pdTRUE)
-    {
-        while (1)
-            ; // Inicializo la aplicacion de comunicacion con el esp (Remote). Ver fichero esp8266uart.c
-    }
-    //	   miSemaforo = xSemaphoreCreateBinary();
-    //	    miSemaforo2 = xSemaphoreCreateBinary();
-    // Para especificacion 2: Inicializa el ADC y crea una tarea...
+//    if (remotelink_init(REMOTELINKesp_TASK_STACK, REMOTELINK_TASK_PRIORITY, messageReceived) != pdTRUE)
+//    {
+//        while (1)
+//            ; // Inicializo la aplicacion de comunicacion con el esp (Remote). Ver fichero esp8266uart.c
+//    }
+//    // Para especificacion 2: Inicializa el ADC y crea una tarea...
     // configADC_IniciaADC();
     configADC_Timer();
     if ((xTaskCreate(ADCTask, (portCHAR *)"ADC", ADC_TASK_STACK, NULL, ADC_TASK_PRIORITY, NULL) != pdTRUE))
@@ -877,14 +892,14 @@ int main(void)
 void GPIOFIntHandler(void)
 {
     // Lee el estado del puerto (activos a nivel bajo)
-    Event event;
+    // Event event;
 
     int32_t i32PinStatus = MAP_GPIOPinRead(GPIO_PORTF_BASE, ALL_BUTTONS | GPIO_PIN_3);
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     ROM_IntDisable(INT_GPIOF);
     int ui8Delay = 0;
 
-    for (ui8Delay = 0; ui8Delay < 16; ui8Delay++)
+    for (ui8Delay = 0; ui8Delay < 32; ui8Delay++)
     {
     }
     if (!(i32PinStatus & LEFT_BUTTON))
@@ -896,10 +911,9 @@ void GPIOFIntHandler(void)
     if (!(i32PinStatus & RIGHT_BUTTON))
     {
         // Send a START event
-        event = EVENT_START;
-        xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
+        //        xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
         // Delay for demonstration
-//
+        //
         xSemaphoreGiveFromISR(miSemaforo2, &xHigherPriorityTaskWoken);
     }
 
@@ -914,7 +928,6 @@ void counterroute(void)
     int32_t i32PinStatus = MAP_GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_3 | GPIO_PIN_2);
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     ROM_IntDisable(INT_GPIOA);
-    //    MAP_GPIOIntClear(GPIO_PORTA_BASE,GPIO_PIN_3 | GPIO_PIN_2);
     int ui8Delay = 0;
     for (ui8Delay = 0; ui8Delay < 16; ui8Delay++)
     {
@@ -938,18 +951,28 @@ void counterroute(void)
 
 void esp32(void)
 {
-
-    int32_t i32PinStatus = MAP_GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_2);
+    Event event;
+    int32_t i32PinStatus = MAP_GPIOPinRead(GPIO_PORTB_BASE, GPIO_PIN_2|GPIO_PIN_3);
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     ROM_IntDisable(INT_GPIOB);
-    MAP_GPIOIntClear(GPIO_PORTB_BASE, GPIO_PIN_2);
+////    MAP_GPIOIntClear(GPIO_PORTB_BASE, GPIO_PIN_2|GPIO_PIN_3);
     int ui8Delay = 0;
-    for (ui8Delay = 0; ui8Delay < 1600; ui8Delay++)
+    for (ui8Delay = 0; ui8Delay < 160; ui8Delay++)
     {
     }
 
     if ((i32PinStatus & GPIO_PIN_2))
     {
+        event = EVENT_FRONT_WHITE;
+
+        xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
+
+        xSemaphoreGiveFromISR(miSemaforo3, &xHigherPriorityTaskWoken);
+    }
+    if((i32PinStatus & GPIO_PIN_3))
+    {
+        event = EVENT_BACK_WHITE;
+        xQueueSendFromISR(eventQueue, &event, &xHigherPriorityTaskWoken);
         xSemaphoreGiveFromISR(miSemaforo3, &xHigherPriorityTaskWoken);
     }
     MAP_IntEnable(INT_GPIOB);
